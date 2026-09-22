@@ -460,40 +460,256 @@ async function loadConfig() {
 // DASHBOARD
 // ==========================================================
 
+let currentChartTab = 'tipo';
+let dashboardDataCache = null;
+
 async function loadDashboard() {
   try {
     const data = await api(`/api/dashboard?mes=${selectedMonth}&ano=${selectedYear}`);
+    dashboardDataCache = data;
 
-    $('metricTotal').textContent = data.indicadores.total;
-    $('metricResolved').textContent = data.indicadores.resolvidas;
-    $('metricProgress').textContent = data.indicadores.em_andamento;
-    $('metricHigh').textContent = data.indicadores.alta_prioridade;
+    // Atualiza métricas numéricas
+    if ($('metricTotal')) $('metricTotal').textContent = data.indicadores.total;
+    if ($('metricResolved')) $('metricResolved').textContent = data.indicadores.resolvidas;
+    if ($('metricProgress')) $('metricProgress').textContent = data.indicadores.em_andamento;
+    if ($('metricHigh')) $('metricHigh').textContent = data.indicadores.alta_prioridade;
 
-    $('barDone').style.width = `${data.percentuais.resolvidas_pct}%`;
-    $('barProg').style.width = `${data.percentuais.em_andamento_pct}%`;
-    $('barOpen').style.width = `${data.percentuais.abertas_pct}%`;
+    // Atualiza barra proporcional de status
+    if ($('barDone')) $('barDone').style.width = `${data.percentuais.resolvidas_pct}%`;
+    if ($('barProg')) $('barProg').style.width = `${data.percentuais.em_andamento_pct}%`;
+    if ($('barOpen')) $('barOpen').style.width = `${data.percentuais.abertas_pct}%`;
 
-    $('donePct').textContent = `${data.percentuais.resolvidas_pct}%`;
-    $('progPct').textContent = `${data.percentuais.em_andamento_pct}%`;
-    $('openPct').textContent = `${data.percentuais.abertas_pct}%`;
+    if ($('donePct')) $('donePct').textContent = `${data.percentuais.resolvidas_pct}%`;
+    if ($('progPct')) $('progPct').textContent = `${data.percentuais.em_andamento_pct}%`;
+    if ($('openPct')) $('openPct').textContent = `${data.percentuais.abertas_pct}%`;
 
+    // Renderiza o novo gráfico interativo com base na aba ativa
+    renderCategoryChart(data);
+
+    // Atualiza lista de atividades recentes com itens interativos clicáveis
     const recentList = $('recentActivitiesList');
     if (!data.atividades_recentes || data.atividades_recentes.length === 0) {
       recentList.innerHTML = '<div class="empty">Nenhuma ocorrência registrada por você neste período.</div>';
     } else {
       recentList.innerHTML = data.atividades_recentes.map((item) => `
-        <div class="activity-item">
+        <div class="activity-item" onclick="openEditModal(${item.id})" title="Clique para ver ou editar esta ocorrência" role="button" tabindex="0">
           <div class="activity-info">
             <strong>${escapeHtml(item.setor)} — ${formatDate(item.data)}</strong>
             <p>${escapeHtml(item.problema)}</p>
           </div>
-          <span class="badge ${clsStatus(item.status)}">${escapeHtml(item.status)}</span>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="badge ${clsStatus(item.status)}">${escapeHtml(item.status)}</span>
+            <span style="font-size: 11.5px; color: var(--blue); font-weight: 600;">Ver &rarr;</span>
+          </div>
         </div>
       `).join('');
     }
   } catch (err) {
     console.error('Erro no dashboard:', err);
   }
+}
+
+// Renderiza o gráfico representativo com barras interativas animadas
+function renderCategoryChart(data) {
+  const container = $('dashboardCategoryChart');
+  if (!container) return;
+
+  if (!data || !data.indicadores || data.indicadores.total === 0) {
+    container.innerHTML = '<div class="empty" style="padding: 24px 0;">Nenhuma ocorrência registrada no período selecionado para gerar o gráfico.</div>';
+    return;
+  }
+
+  const total = data.indicadores.total;
+  let items = [];
+  let categoryType = currentChartTab;
+
+  if (currentChartTab === 'tipo') {
+    items = (data.por_tipo || []).map(i => ({
+      name: i.tipo_problema,
+      total: i.total,
+      resolvidas: i.resolvidas,
+      icon: getIconForCategory(i.tipo_problema)
+    }));
+  } else if (currentChartTab === 'setor') {
+    items = (data.por_setor || []).map(i => ({
+      name: i.setor,
+      total: i.total,
+      resolvidas: i.resolvidas,
+      icon: '🏢'
+    }));
+  } else if (currentChartTab === 'prioridade') {
+    items = (data.por_prioridade || []).map(i => ({
+      name: i.prioridade,
+      total: i.total,
+      resolvidas: 0,
+      icon: i.prioridade === 'Urgente' ? '🚨' : (i.prioridade === 'Alta' ? '⚠️' : '🔹')
+    }));
+  }
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty" style="padding: 24px 0;">Nenhum dado encontrado para esta categoria.</div>';
+    return;
+  }
+
+  container.innerHTML = items.map((item) => {
+    const pct = Math.round((item.total / total) * 100);
+    const gradColor = getGradientForTab(currentChartTab, item.name);
+
+    return `
+      <div class="cat-bar-row" onclick="filterHistoryFromCategory('${categoryType}', '${escapeHtml(item.name)}')" title="Clique para ver ocorrências de '${escapeHtml(item.name)}' no histórico">
+        <div class="cat-bar-info">
+          <div class="cat-bar-name">
+            <span>${item.icon}</span>
+            <span>${escapeHtml(item.name)}</span>
+          </div>
+          <div class="cat-bar-counts">
+            <span>${item.total} chamada${item.total > 1 ? 's' : ''}</span>
+            <span class="cat-bar-badge">${pct}%</span>
+          </div>
+        </div>
+        <div class="cat-bar-track">
+          <div class="cat-bar-fill" style="width: ${pct}%; background: ${gradColor};"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Retorna ícone visual para cada categoria de problema
+function getIconForCategory(tipo) {
+  const map = {
+    'Hardware': '💻',
+    'Software': '💾',
+    'Rede/Internet': '🌐',
+    'Impressão': '🖨️',
+    'Acesso/Usuário': '🔑',
+    'Outro': '📦'
+  };
+  return map[tipo] || '⚙️';
+}
+
+// Retorna gradientes diferenciados e vibrantes para as barras do gráfico
+function getGradientForTab(tab, name) {
+  if (tab === 'prioridade') {
+    if (name === 'Urgente') return 'linear-gradient(90deg, #dc2626, #ef4444)';
+    if (name === 'Alta') return 'linear-gradient(90deg, #d97706, #f59e0b)';
+    return 'linear-gradient(90deg, #2563eb, #3b82f6)';
+  }
+  if (tab === 'tipo') {
+    const colorMap = {
+      'Hardware': 'linear-gradient(90deg, #4f46e5, #6366f1)',
+      'Software': 'linear-gradient(90deg, #0284c7, #38bdf8)',
+      'Rede/Internet': 'linear-gradient(90deg, #059669, #10b981)',
+      'Impressão': 'linear-gradient(90deg, #d97706, #fbbf24)',
+      'Acesso/Usuário': 'linear-gradient(90deg, #7c3aed, #a855f7)',
+      'Outro': 'linear-gradient(90deg, #64748b, #94a3b8)'
+    };
+    return colorMap[name] || 'linear-gradient(90deg, #1b5cb8, #3b82f6)';
+  }
+  return 'linear-gradient(90deg, #0284c7, #2563eb)';
+}
+
+// Alterna entre abas do novo gráfico (Tipo, Setor, Prioridade)
+function switchDashboardChart(tabName) {
+  currentChartTab = tabName;
+  $('tabChartTipo')?.classList.toggle('active', tabName === 'tipo');
+  $('tabChartSetor')?.classList.toggle('active', tabName === 'setor');
+  $('tabChartPrioridade')?.classList.toggle('active', tabName === 'prioridade');
+
+  if (dashboardDataCache) {
+    renderCategoryChart(dashboardDataCache);
+  }
+}
+
+// Interatividade dos Cards de Métricas: Filtra o Histórico diretamente pelo Card clicado
+function filterHistoryFromCard(filterType) {
+  showView('historico');
+
+  // Sincroniza mês e ano do histórico com o período visto no dashboard
+  if ($('historyMonth')) $('historyMonth').value = selectedMonth;
+  if ($('historyYear')) $('historyYear').value = selectedYear;
+
+  if (filterType === 'todos') {
+    if ($('historyStatus')) $('historyStatus').value = '';
+    if ($('historyPriority')) $('historyPriority').value = '';
+    if ($('historySearch')) $('historySearch').value = '';
+    showToast('Exibindo todas as ocorrências do período.');
+  } else if (filterType === 'Resolvido' || filterType === 'Em andamento' || filterType === 'Aberto') {
+    if ($('historyStatus')) $('historyStatus').value = filterType;
+    if ($('historyPriority')) $('historyPriority').value = '';
+    showToast(`Filtrando histórico por: ${filterType}`);
+  } else if (filterType === 'alta') {
+    if ($('historyStatus')) $('historyStatus').value = '';
+    if ($('historyPriority')) $('historyPriority').value = 'Alta';
+    showToast('Filtrando histórico por: Alta Prioridade / Urgente');
+  }
+
+  loadHistory();
+}
+
+// Interatividade das Barras do Gráfico: Filtra o histórico pela Categoria/Setor clicado
+function filterHistoryFromCategory(categoryType, value) {
+  showView('historico');
+
+  if ($('historyMonth')) $('historyMonth').value = selectedMonth;
+  if ($('historyYear')) $('historyYear').value = selectedYear;
+
+  if (categoryType === 'prioridade') {
+    if ($('historyPriority')) $('historyPriority').value = value;
+    if ($('historyStatus')) $('historyStatus').value = '';
+    if ($('historySearch')) $('historySearch').value = '';
+    showToast(`Filtrando histórico por prioridade: ${value}`);
+  } else {
+    // Para setor e tipo, usa a busca rápida
+    if ($('historySearch')) $('historySearch').value = value;
+    if ($('historyStatus')) $('historyStatus').value = '';
+    if ($('historyPriority')) $('historyPriority').value = '';
+    showToast(`Filtrando histórico por: ${value}`);
+  }
+
+  loadHistory();
+}
+
+// Botão de Atualizar dados com rotação suave e feedback
+async function refreshDashboardWithAnimation() {
+  const btn = $('btnDashRefresh');
+  if (btn) btn.classList.add('spinning');
+
+  await loadDashboard();
+
+  setTimeout(() => {
+    if (btn) btn.classList.remove('spinning');
+  }, 600);
+
+  showToast('Painel atualizado com sucesso!');
+}
+
+// Botões rápidos de alternância de período (Este Mês / Mês Anterior)
+function setDashboardPeriod(type) {
+  const now = new Date();
+  if (type === 'current') {
+    selectedMonth = now.getMonth() + 1;
+    selectedYear = now.getFullYear();
+    $('btnDashQuickCurrent')?.classList.add('active');
+    $('btnDashQuickPrev')?.classList.remove('active');
+  } else if (type === 'prev') {
+    let m = now.getMonth();
+    let y = now.getFullYear();
+    if (m === 0) {
+      m = 12;
+      y -= 1;
+    }
+    selectedMonth = m;
+    selectedYear = y;
+    $('btnDashQuickPrev')?.classList.add('active');
+    $('btnDashQuickCurrent')?.classList.remove('active');
+  }
+
+  if ($('dashMonth')) $('dashMonth').value = selectedMonth;
+  if ($('dashYear')) $('dashYear').value = selectedYear;
+
+  loadDashboard();
+  showToast(`Período alterado para: ${String(selectedMonth).padStart(2, '0')}/${selectedYear}`);
 }
 
 // ==========================================================

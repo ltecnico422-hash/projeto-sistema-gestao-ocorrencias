@@ -71,6 +71,40 @@ router.get('/', (req, res) => {
       LIMIT 5
     `).all(usuarioId, ano, mes);
 
+    // Distribuição por Setor no período
+    const porSetor = db.prepare(`
+      SELECT setor, COUNT(*) as total,
+             SUM(CASE WHEN status = 'Resolvido' THEN 1 ELSE 0 END) as resolvidas
+      FROM ocorrencias
+      WHERE usuario_id = ?
+        AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+      GROUP BY setor
+      ORDER BY total DESC
+      LIMIT 8
+    `).all(usuarioId, ano, mes);
+
+    // Distribuição por Tipo de Problema no período
+    const porTipo = db.prepare(`
+      SELECT tipo_problema, COUNT(*) as total,
+             SUM(CASE WHEN status = 'Resolvido' THEN 1 ELSE 0 END) as resolvidas
+      FROM ocorrencias
+      WHERE usuario_id = ?
+        AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+      GROUP BY tipo_problema
+      ORDER BY total DESC
+      LIMIT 8
+    `).all(usuarioId, ano, mes);
+
+    // Distribuição por Prioridade no período
+    const porPrioridade = db.prepare(`
+      SELECT prioridade, COUNT(*) as total
+      FROM ocorrencias
+      WHERE usuario_id = ?
+        AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+      GROUP BY prioridade
+      ORDER BY total DESC
+    `).all(usuarioId, ano, mes);
+
     res.json({
       periodo: {
         mes: Number(mes),
@@ -88,6 +122,9 @@ router.get('/', (req, res) => {
         em_andamento_pct: emAndamentoPct,
         abertas_pct: abertasPct
       },
+      por_setor: porSetor,
+      por_tipo: porTipo,
+      por_prioridade: porPrioridade,
       atividades_recentes: atividadesRecentes
     });
   } catch (error) {

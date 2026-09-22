@@ -181,25 +181,36 @@
       <div id="dashboard" class="view active">
         <div class="title-row">
           <div>
-            <div class="eyebrow">Painel operacional</div>
-            <h2>Visão geral</h2>
+            <div class="eyebrow">Painel Operacional Inteligente</div>
+            <h2>Visão geral das Ocorrências</h2>
           </div>
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <div class="dashboard-actions-row">
             <div class="period-control">
-              <label>Mês:</label>
+              <label for="dashMonth">Mês:</label>
               <select id="dashMonth"></select>
-              <label>Ano:</label>
+              <label for="dashYear">Ano:</label>
               <select id="dashYear"></select>
             </div>
-            <button class="btn btn-light" onclick="showView('relatorio')">
-              ▤ Ver relatório mensal
-            </button>
+            <div class="dash-quick-btns">
+              <button type="button" class="btn btn-light btn-sm" id="btnDashQuickCurrent" onclick="setDashboardPeriod('current')" title="Ver mês atual">
+                Este Mês
+              </button>
+              <button type="button" class="btn btn-light btn-sm" id="btnDashQuickPrev" onclick="setDashboardPeriod('prev')" title="Ver mês anterior">
+                Mês Anterior
+              </button>
+              <button type="button" class="btn btn-light btn-sm" id="btnDashRefresh" onclick="refreshDashboardWithAnimation()" title="Atualizar dados agora">
+                <span class="refresh-icon">↻</span> Atualizar
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="showView('novo')" title="Registrar chamado">
+                + Nova Ocorrência
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Cards de Métricas -->
+        <!-- Cards de Métricas Interativos -->
         <div class="cards">
-          <div class="card">
+          <div class="card metric-card interactive-card" onclick="filterHistoryFromCard('todos')" title="Clique para ver todas as ocorrências deste período" role="button" tabindex="0">
             <div class="metric">
               <div>
                 <div class="metric-label">TOTAL DE OCORRÊNCIAS</div>
@@ -207,8 +218,13 @@
               </div>
               <div class="metric-icon">▦</div>
             </div>
+            <div class="card-action">
+              <span>Ver todas no histórico</span>
+              <span class="arrow">&rarr;</span>
+            </div>
           </div>
-          <div class="card green">
+
+          <div class="card green metric-card interactive-card" onclick="filterHistoryFromCard('Resolvido')" title="Clique para ver ocorrências resolvidas" role="button" tabindex="0">
             <div class="metric">
               <div>
                 <div class="metric-label">RESOLVIDAS</div>
@@ -216,8 +232,13 @@
               </div>
               <div class="metric-icon">✓</div>
             </div>
+            <div class="card-action">
+              <span>Ver resolvidas</span>
+              <span class="arrow">&rarr;</span>
+            </div>
           </div>
-          <div class="card orange">
+
+          <div class="card orange metric-card interactive-card" onclick="filterHistoryFromCard('Em andamento')" title="Clique para ver ocorrências em andamento" role="button" tabindex="0">
             <div class="metric">
               <div>
                 <div class="metric-label">EM ANDAMENTO</div>
@@ -225,8 +246,13 @@
               </div>
               <div class="metric-icon">◷</div>
             </div>
+            <div class="card-action">
+              <span>Ver em andamento</span>
+              <span class="arrow">&rarr;</span>
+            </div>
           </div>
-          <div class="card red">
+
+          <div class="card red metric-card interactive-card" onclick="filterHistoryFromCard('alta')" title="Clique para ver ocorrências de alta prioridade e urgentes" role="button" tabindex="0">
             <div class="metric">
               <div>
                 <div class="metric-label">ALTA PRIORIDADE / URGENTE</div>
@@ -234,29 +260,71 @@
               </div>
               <div class="metric-icon">!</div>
             </div>
+            <div class="card-action">
+              <span>Ver urgentes</span>
+              <span class="arrow">&rarr;</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Novo Gráfico Representativo Interativo -->
+        <div class="card chart-interactive-card" style="margin-bottom: 24px;">
+          <div class="chart-header">
+            <div>
+              <h3>Análise Gráfica das Ocorrências</h3>
+              <p class="chart-sub">Alterne entre as visões abaixo e clique em qualquer barra para abrir as ocorrências no histórico</p>
+            </div>
+            <div class="chart-tabs" role="tablist">
+              <button type="button" class="chart-tab-btn active" id="tabChartTipo" onclick="switchDashboardChart('tipo')">
+                ⚙️ Por Categoria / Tipo
+              </button>
+              <button type="button" class="chart-tab-btn" id="tabChartSetor" onclick="switchDashboardChart('setor')">
+                🏢 Por Setor
+              </button>
+              <button type="button" class="chart-tab-btn" id="tabChartPrioridade" onclick="switchDashboardChart('prioridade')">
+                ⚠️ Por Prioridade
+              </button>
+            </div>
+          </div>
+
+          <!-- Barras Animadas e Interativas -->
+          <div id="dashboardCategoryChart" class="category-bars-list">
+            <div class="empty">Carregando gráfico...</div>
           </div>
         </div>
 
         <!-- Grids: Status Proporcional & Atividade Recente -->
         <div class="grid-2">
           <div class="card">
-            <h3>Distribuição de status das ocorrências</h3>
+            <h3>
+              <span>Distribuição de status</span>
+              <span style="font-size: 11.5px; font-weight: 500; color: var(--muted);">Clique para filtrar</span>
+            </h3>
             <div class="progress-container">
-              <div class="bar">
-                <div id="barDone" class="bar-segment done" style="width: 0%"></div>
-                <div id="barProg" class="bar-segment prog" style="width: 0%"></div>
-                <div id="barOpen" class="bar-segment open" style="width: 0%"></div>
+              <div class="bar interactive-bar" title="Clique em um segmento para filtrar">
+                <div id="barDone" class="bar-segment done" style="width: 0%" onclick="filterHistoryFromCard('Resolvido')" title="Ver resolvidas"></div>
+                <div id="barProg" class="bar-segment prog" style="width: 0%" onclick="filterHistoryFromCard('Em andamento')" title="Ver em andamento"></div>
+                <div id="barOpen" class="bar-segment open" style="width: 0%" onclick="filterHistoryFromCard('Aberto')" title="Ver abertas"></div>
               </div>
-              <div class="legend">
-                <span><i class="dot"></i>Resolvidas <b id="donePct">0%</b></span>
-                <span><i class="dot yellow"></i>Em andamento <b id="progPct">0%</b></span>
-                <span><i class="dot gray"></i>Abertas <b id="openPct">0%</b></span>
+              <div class="legend interactive-legend">
+                <span onclick="filterHistoryFromCard('Resolvido')" title="Clique para filtrar resolvidas" role="button" tabindex="0">
+                  <i class="dot"></i>Resolvidas <b id="donePct">0%</b>
+                </span>
+                <span onclick="filterHistoryFromCard('Em andamento')" title="Clique para filtrar em andamento" role="button" tabindex="0">
+                  <i class="dot yellow"></i>Em andamento <b id="progPct">0%</b>
+                </span>
+                <span onclick="filterHistoryFromCard('Aberto')" title="Clique para filtrar abertas" role="button" tabindex="0">
+                  <i class="dot gray"></i>Abertas <b id="openPct">0%</b>
+                </span>
               </div>
             </div>
           </div>
 
           <div class="card">
-            <h3>Atividade recente no período</h3>
+            <h3>
+              <span>Atividade recente no período</span>
+              <button type="button" class="btn btn-light btn-sm" onclick="showView('historico')">Ver todas &rarr;</button>
+            </h3>
             <div id="recentActivitiesList" class="activity-list">
               <div class="empty">Nenhuma ocorrência registrada neste período.</div>
             </div>
