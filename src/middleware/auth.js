@@ -1,0 +1,46 @@
+const { verifyToken } = require('../utils/security');
+const db = require('../database/db');
+
+function authMiddleware(req, res, next) {
+  let token = null;
+
+  // 1. Busca no cabeçalho Authorization
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  }
+
+  // 2. Busca nos parâmetros de query (necessário para downloads diretos em links de PDF e Word)
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    return res.status(401).json({
+      erro: 'Acesso não autorizado. Faça login para continuar.',
+      nao_autenticado: true
+    });
+  }
+
+  const payload = verifyToken(token);
+  if (!payload || !payload.id) {
+    return res.status(401).json({
+      erro: 'Sessão inválida ou expirada. Por favor, faça login novamente.',
+      nao_autenticado: true
+    });
+  }
+
+  // Valida usuário no banco
+  const usuario = db.prepare('SELECT id, nome, email FROM usuarios WHERE id = ?').get(payload.id);
+  if (!usuario) {
+    return res.status(401).json({
+      erro: 'Usuário não encontrado. Por favor, faça login novamente.',
+      nao_autenticado: true
+    });
+  }
+
+  req.usuario = usuario;
+  next();
+}
+
+module.exports = authMiddleware;

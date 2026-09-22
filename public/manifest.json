@@ -1,0 +1,19 @@
+{
+  "name": "TI Hospital Regional — Gestão de Ocorrências",
+  "short_name": "TI Hospital",
+  "description": "Sistema de Gestão e Relatório de Ocorrências de TI do Hospital Regional",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07356f",
+  "theme_color": "#07356f",
+  "icons": [
+    {
+      "src": "/uploads/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

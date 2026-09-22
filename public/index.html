@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TI Hospital Regional — Gestão de Ocorrências</title>
+  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="icon" href="/uploads/logo.png" type="image/png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#07356f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/uploads/logo.png">
+</head>
+<body>
+
+<!-- ============================================== -->
+<!-- TELA DE AUTENTICAÇÃO (LOGIN / CADASTRO) -->
+<!-- ============================================== -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="auth-logo">TI</div>
+      <h2>Hospital Regional</h2>
+      <p>Gestão e Relatórios de Ocorrências de T.I.</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab-btn active" id="tabLoginBtn" onclick="switchAuthTab('login')">Entrar</button>
+      <button type="button" class="auth-tab-btn" id="tabCadastroBtn" onclick="switchAuthTab('cadastro')">Criar conta</button>
+    </div>
+
+    <div id="authAlert" class="auth-alert"></div>
+
+    <!-- Formulário de Login -->
+    <form id="loginForm">
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="loginEmail">E-mail</label>
+        <input type="email" id="loginEmail" required placeholder="seu.email@hospital.com">
+      </div>
+      <div class="field" style="margin-bottom: 10px;">
+        <label for="loginSenha">Senha</label>
+        <input type="password" id="loginSenha" required placeholder="Sua senha de acesso">
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+        <a href="javascript:void(0)" onclick="switchAuthTab('recuperar')" style="font-size: 12.5px; color: var(--blue); text-decoration: none; font-weight: 600;">
+          Esqueceu a senha?
+        </a>
+      </div>
+      <button type="submit" class="btn btn-primary auth-btn-submit">Entrar no sistema</button>
+    </form>
+
+    <!-- Formulário de Cadastro -->
+    <form id="cadastroForm" style="display: none;">
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="cadNome">Nome completo</label>
+        <input type="text" id="cadNome" required placeholder="Ex.: Lucas Lima - Técnico de T.I.">
+      </div>
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="cadEmail">E-mail</label>
+        <input type="email" id="cadEmail" required placeholder="lucas.ti@hospital.com">
+      </div>
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="cadSenha">Crie uma senha (mínimo 4 dígitos)</label>
+        <input type="password" id="cadSenha" required minlength="4" placeholder="Senha segura">
+      </div>
+      <button type="submit" class="btn btn-success auth-btn-submit">Criar minha conta e entrar</button>
+    </form>
+
+    <!-- Formulário de Recuperação de Senha -->
+    <form id="recuperarForm" style="display: none;">
+      <div style="background: #edf4fb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: var(--ink); line-height: 1.4;">
+        🔒 <strong>Recuperação de Acesso:</strong> Digite seu e-mail cadastrado e crie uma nova senha. Todas as suas ocorrências e relatórios continuam preservados no sistema.
+      </div>
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="recEmail">E-mail cadastrado</label>
+        <input type="email" id="recEmail" required placeholder="seu.email@hospital.com">
+      </div>
+      <div class="field" style="margin-bottom: 14px;">
+        <label for="recSenha">Nova senha (mínimo 4 dígitos)</label>
+        <input type="password" id="recSenha" required minlength="4" placeholder="Nova senha">
+      </div>
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="recSenhaConfirm">Confirmar nova senha</label>
+        <input type="password" id="recSenhaConfirm" required minlength="4" placeholder="Repita a nova senha">
+      </div>
+      <button type="submit" class="btn btn-primary auth-btn-submit">Redefinir senha e entrar</button>
+      <div style="text-align: center; margin-top: 14px;">
+        <a href="javascript:void(0)" onclick="switchAuthTab('login')" style="font-size: 13px; color: var(--muted); text-decoration: none; font-weight: 600;">
+          ← Voltar para a tela de login
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================== -->
+<!-- APLICAÇÃO PRINCIPAL (EXIBIDA APÓS O LOGIN) -->
+<!-- ============================================== -->
+<div class="app" id="mainApp" style="display: none;">
+  <!-- Backdrop para fechar a sidebar no mobile -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+
+  <!-- Barra Lateral (Drawer no Mobile) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">TI</div>
+      <div class="brand-text">
+        <strong>HOSPITAL REGIONAL</strong>
+        <small id="sidebarHospitalSub">NOSSA SENHORA DO BOM CONSELHO</small>
+      </div>
+      <button class="sidebar-close-btn" onclick="toggleSidebar(false)" aria-label="Fechar menu">&times;</button>
+    </div>
+
+    <nav class="nav">
+      <button class="active" data-view="dashboard">
+        <span>⌂</span><b>Dashboard</b>
+      </button>
+      <button data-view="novo">
+        <span>＋</span><b>Nova ocorrência</b>
+      </button>
+      <button data-view="historico">
+        <span>☷</span><b>Histórico</b>
+      </button>
+      <button data-view="relatorio">
+        <span>▤</span><b>Relatório mensal</b>
+      </button>
+      <button data-view="config">
+        <span>⚙</span><b>Configurações</b>
+      </button>
+    </nav>
+
+    <div class="side-note">
+      Sistema de gestão de ocorrências<br>
+      <b id="sidebarSector">Tecnologia da Informação</b>
+    </div>
+  </aside>
+
+  <!-- Área Principal -->
+  <main class="main">
+    <!-- Cabeçalho Topo -->
+    <header class="top">
+      <div class="top-left">
+        <button class="mobile-menu-btn" onclick="toggleSidebar(true)" aria-label="Abrir menu de navegação">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div>
+          <h1 id="pageTitle">Visão geral</h1>
+          <p id="pageSubtitle">Controle profissional e indicadores em tempo real da operação de T.I.</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-success btn-sm" id="btnInstallPwa" style="display: none;" onclick="installPwa()">
+          📲 Instalar App
+        </button>
+        <button class="btn btn-primary top-novo-btn" onclick="showView('novo')">
+          <span>＋</span> Nova ocorrência
+        </button>
+        <div class="avatar-badge">
+          <div class="avatar-circle" id="topAvatarLetter">TI</div>
+          <div class="avatar-info">
+            <strong id="topUserName">Operação T.I.</strong>
+            <span id="topUserEmail">Hospital Regional</span>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="logout()" title="Encerrar sessão">
+          <span>⏻</span> <span class="logout-text">Sair</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Conteúdo Central -->
+    <section class="content">
+
+      <!-- ============================================== -->
+      <!-- 1. DASHBOARD -->
+      <!-- ============================================== -->
+      <div id="dashboard" class="view active">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Painel operacional</div>
+            <h2>Visão geral</h2>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <div class="period-control">
+              <label>Mês:</label>
+              <select id="dashMonth"></select>
+              <label>Ano:</label>
+              <select id="dashYear"></select>
+            </div>
+            <button class="btn btn-light" onclick="showView('relatorio')">
+              ▤ Ver relatório mensal
+            </button>
+          </div>
+        </div>
+
+        <!-- Cards de Métricas -->
+        <div class="cards">
+          <div class="card">
+            <div class="metric">
+              <div>
+                <div class="metric-label">TOTAL DE OCORRÊNCIAS</div>
+                <div id="metricTotal" class="metric-value">0</div>
+              </div>
+              <div class="metric-icon">▦</div>
+            </div>
+          </div>
+          <div class="card green">
+            <div class="metric">
+              <div>
+                <div class="metric-label">RESOLVIDAS</div>
+                <div id="metricResolved" class="metric-value">0</div>
+              </div>
+              <div class="metric-icon">✓</div>
+            </div>
+          </div>
+          <div class="card orange">
+            <div class="metric">
+              <div>
+                <div class="metric-label">EM ANDAMENTO</div>
+                <div id="metricProgress" class="metric-value">0</div>
+              </div>
+              <div class="metric-icon">◷</div>
+            </div>
+          </div>
+          <div class="card red">
+            <div class="metric">
+              <div>
+                <div class="metric-label">ALTA PRIORIDADE / URGENTE</div>
+                <div id="metricHigh" class="metric-value">0</div>
+              </div>
+              <div class="metric-icon">!</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grids: Status Proporcional & Atividade Recente -->
+        <div class="grid-2">
+          <div class="card">
+            <h3>Distribuição de status das ocorrências</h3>
+            <div class="progress-container">
+              <div class="bar">
+                <div id="barDone" class="bar-segment done" style="width: 0%"></div>
+                <div id="barProg" class="bar-segment prog" style="width: 0%"></div>
+                <div id="barOpen" class="bar-segment open" style="width: 0%"></div>
+              </div>
+              <div class="legend">
+                <span><i class="dot"></i>Resolvidas <b id="donePct">0%</b></span>
+                <span><i class="dot yellow"></i>Em andamento <b id="progPct">0%</b></span>
+                <span><i class="dot gray"></i>Abertas <b id="openPct">0%</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Atividade recente no período</h3>
+            <div id="recentActivitiesList" class="activity-list">
+              <div class="empty">Nenhuma ocorrência registrada neste período.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- 2. NOVA OCORRÊNCIA -->
+      <!-- ============================================== -->
+      <div id="novo" class="view">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Registro operacional</div>
+            <h2>Nova ocorrência</h2>
+          </div>
+        </div>
+
+        <div class="card form-card">
+          <form id="newIncidentForm">
+            <div class="form-grid">
+              <div class="field">
+                <label for="newSetor">Setor *</label>
+                <input id="newSetor" name="setor" required placeholder="Ex.: UTI NEO, Pronto Atendimento, Farmácia" list="setoresList">
+                <datalist id="setoresList">
+                  <option value="UTI Geral"></option>
+                  <option value="UTI NEO"></option>
+                  <option value="Pronto Atendimento"></option>
+                  <option value="Centro Cirúrgico"></option>
+                  <option value="Farmácia Central"></option>
+                  <option value="Recepção / Triagem"></option>
+                  <option value="Laboratório"></option>
+                  <option value="Almoxarifado"></option>
+                  <option value="Faturamento"></option>
+                  <option value="Recursos Humanos"></option>
+                  <option value="Diretoria"></option>
+                </datalist>
+              </div>
+
+              <div class="field">
+                <label for="newData">Data do chamado *</label>
+                <input id="newData" type="date" name="data" required>
+              </div>
+
+              <div class="field">
+                <label for="newTipo">Tipo do problema *</label>
+                <select id="newTipo" name="tipo_problema" required>
+                  <option value="">Selecione a categoria</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Software">Software</option>
+                  <option value="Rede/Internet">Rede/Internet</option>
+                  <option value="Impressão">Impressão</option>
+                  <option value="Acesso/Usuário">Acesso/Usuário</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="newPrioridade">Prioridade *</label>
+                <select id="newPrioridade" name="prioridade" required>
+                  <option value="Normal">Normal</option>
+                  <option value="Alta">Alta</option>
+                  <option value="Urgente">Urgente</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="newStatus">Status inicial *</label>
+                <select id="newStatus" name="status" required>
+                  <option value="Aberto">Aberto</option>
+                  <option value="Em andamento">Em andamento</option>
+                  <option value="Resolvido">Resolvido</option>
+                </select>
+              </div>
+
+              <div class="field full">
+                <label for="newProblema">Descrição do problema relatado *</label>
+                <textarea id="newProblema" name="problema" required placeholder="Descreva o problema com clareza (ex: Computador não conecta ao sistema de prontuário eletrônico)..."></textarea>
+              </div>
+
+              <div class="field full">
+                <label for="newDiagnostico">Diagnóstico da T.I.</label>
+                <textarea id="newDiagnostico" name="diagnostico" placeholder="Causa identificada pela equipe técnica..."></textarea>
+              </div>
+
+              <div class="field full">
+                <label for="newFeito">O que foi feito / Providências realizadas</label>
+                <textarea id="newFeito" name="o_que_foi_feito" placeholder="Ações executadas para resolução (ex: Limpeza de cache, reinício do serviço, troca do cabo)..."></textarea>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="reset" class="btn btn-light">Limpar campos</button>
+              <button type="submit" class="btn btn-primary">✓ Salvar ocorrência</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- 3. HISTÓRICO -->
+      <!-- ============================================== -->
+      <div id="historico" class="view">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Base de dados</div>
+            <h2>Histórico de ocorrências</h2>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showView('novo')">
+            + Nova ocorrência
+          </button>
+        </div>
+
+        <!-- Barra de Filtros -->
+        <div class="toolbar">
+          <input id="historySearch" placeholder="Buscar por setor, problema, diagnóstico ou providência...">
+          <select id="historyMonth">
+            <option value="">Todos os meses</option>
+          </select>
+          <select id="historyYear">
+            <option value="">Todos os anos</option>
+          </select>
+          <select id="historyStatus">
+            <option value="">Todos os status</option>
+            <option value="Aberto">Aberto</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Resolvido">Resolvido</option>
+          </select>
+          <select id="historyPriority">
+            <option value="">Todas as prioridades</option>
+            <option value="Normal">Normal</option>
+            <option value="Alta">Alta</option>
+            <option value="Urgente">Urgente</option>
+          </select>
+          <button class="btn btn-light btn-sm" id="btnResetFilters">Limpar filtros</button>
+          <button class="btn btn-success btn-sm" id="btnHistoryExcel">⇩ Exportar Excel (.xlsx)</button>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card table-card">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width: 110px;">DATA</th>
+                  <th style="width: 180px;">SETOR / TIPO</th>
+                  <th>PROBLEMA / DIAGNÓSTICO</th>
+                  <th style="width: 130px;">STATUS</th>
+                  <th style="width: 120px;">PRIORIDADE</th>
+                  <th style="width: 140px; text-align: right;">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr><td colspan="6" class="empty">Carregando ocorrências...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- 4. RELATÓRIO MENSAL -->
+      <!-- ============================================== -->
+      <div id="relatorio" class="view">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Documento gerencial oficial</div>
+            <h2>Relatório mensal de T.I.</h2>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <div class="period-control">
+              <label>Período:</label>
+              <select id="reportMonthSelect"></select>
+              <select id="reportYearSelect"></select>
+            </div>
+            <button class="btn btn-success" id="btnDownloadExcel">
+              ⇩ Baixar Excel (.xlsx)
+            </button>
+            <button class="btn btn-light" id="btnDownloadDocx">
+              ⇩ Baixar Word (.docx)
+            </button>
+            <button class="btn btn-primary" id="btnDownloadPdf">
+              ⇩ Baixar PDF
+            </button>
+            <button class="btn btn-light" onclick="window.print()">
+              🖶 Imprimir / A4
+            </button>
+          </div>
+        </div>
+
+        <!-- Folha de Relatório Oficial -->
+        <div class="report-box" id="reportPreview">
+          <div class="report-head">
+            <img id="reportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+            <h2>RELATÓRIO MENSAL DE OCORRÊNCIAS DE T.I.</h2>
+            <p id="reportHospitalTitle">Hospital Regional Nossa Senhora do Bom Conselho</p>
+          </div>
+
+          <div class="report-meta">
+            <div><strong>Período:</strong> <span id="reportPeriodText">setembro de 2026</span></div>
+            <div><strong>Responsável:</strong> <span id="reportResponsibleText">Não informado</span></div>
+            <div><strong>Setor:</strong> <span id="reportSectorText">Tecnologia da Informação</span></div>
+            <div><strong>Emissão:</strong> <span id="reportIssueDate">21/09/2026</span></div>
+          </div>
+
+          <div class="report-section">
+            <h4>1. Resumo executivo</h4>
+            <p id="reportExecutiveSummary">Carregando resumo...</p>
+            <div id="reportExecutiveList" style="margin-top: 14px;"></div>
+          </div>
+
+          <div class="report-section">
+            <h4>2. Indicadores do período</h4>
+            <table class="report-table">
+              <tbody>
+                <tr><td>Total de ocorrências</td><td id="rTotal" style="text-align: right; font-weight: bold;">0</td></tr>
+                <tr><td>Ocorrências resolvidas</td><td id="rResolved" style="text-align: right;">0</td></tr>
+                <tr><td>Ocorrências em andamento</td><td id="rProgress" style="text-align: right;">0</td></tr>
+                <tr><td>Ocorrências abertas</td><td id="rOpen" style="text-align: right;">0</td></tr>
+                <tr><td>Alta prioridade / urgente</td><td id="rHigh" style="text-align: right;">0</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="report-section">
+            <h4>3. Observações</h4>
+            <p>Este relatório foi gerado automaticamente a partir dos registros do sistema de gestão de ocorrências da Tecnologia da Informação.</p>
+          </div>
+
+          <div class="signature">
+            Responsável pelo relatório<br>
+            <strong id="reportSigName">Nome do responsável</strong>
+            <span id="reportSigSector" style="color: #666; font-size: 11px;">Tecnologia da Informação</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- 5. CONFIGURAÇÕES -->
+      <!-- ============================================== -->
+      <div id="config" class="view">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Personalização institucional</div>
+            <h2>Configurações do sistema</h2>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Dados Institucionais -->
+          <div class="card form-card">
+            <h3>Identificação Institucional</h3>
+            <form id="configForm">
+              <div class="field" style="margin-bottom: 14px;">
+                <label for="cfgHospital">Nome do Hospital</label>
+                <input id="cfgHospital" name="nome_hospital" required>
+              </div>
+
+              <div class="field" style="margin-bottom: 14px;">
+                <label for="cfgSetor">Setor</label>
+                <input id="cfgSetor" name="setor" required>
+              </div>
+
+              <div class="field" style="margin-bottom: 14px;">
+                <label for="cfgResponsavel">Nome completo do responsável pela T.I.</label>
+                <input id="cfgResponsavel" name="nome_responsavel" placeholder="Ex.: Lucas Lima - Coord. de T.I.">
+                <small style="color: var(--muted); font-size: 11.5px;">
+                  Este nome será impresso no cabeçalho e no campo de assinatura do relatório mensal.
+                </small>
+              </div>
+
+              <div class="form-actions" style="margin-top: 18px;">
+                <button type="submit" class="btn btn-primary">Salvar alterações</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Upload de Logotipo -->
+          <div class="card">
+            <h3>Logotipo Oficial</h3>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 14px;">
+              A imagem será utilizada no cabeçalho dos relatórios em Word e PDF.
+            </p>
+
+            <img id="cfgLogoPreview" class="logo-preview-img" src="/uploads/logo.png" alt="Prévia do Logo" onerror="this.src=''">
+
+            <form id="logoUploadForm">
+              <div class="logo-upload-box" onclick="document.getElementById('logoFileInput').click()">
+                <div style="font-size: 28px; margin-bottom: 6px;">📷</div>
+                <strong style="font-size: 13px; color: var(--blue);">Clique para selecionar uma imagem</strong>
+                <p style="font-size: 11.5px; color: var(--muted); margin-top: 4px;">PNG, JPG, WEBP ou SVG (máx. 5MB)</p>
+                <input type="file" id="logoFileInput" accept="image/*" style="display: none;">
+              </div>
+              <div class="form-actions" style="margin-top: 14px;">
+                <button type="submit" id="btnUploadLogo" class="btn btn-success" disabled>
+                  Enviar novo logotipo
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Cópia de Segurança / Backup do Banco de Dados -->
+          <div class="card" style="grid-column: 1 / -1; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 24px;">💾</span>
+              <h3 style="margin-bottom: 0;">Cópia de Segurança (Backup do Banco de Dados)</h3>
+            </div>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+              Baixe com 1 clique o arquivo completo de banco de dados SQLite (<code>.sqlite</code>) contendo todos os chamados, usuários e configurações para salvar em um pendrive ou na nuvem com segurança máxima.
+            </p>
+            <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" id="btnDownloadBackup">
+                ⬇ Baixar Cópia de Segurança (.sqlite)
+              </button>
+              <span style="font-size: 12px; color: var(--green-dark); font-weight: 600;">
+                ✓ Cópia consistente e pronta para restauração imediata
+              </span>
+            </div>
+          </div>
+
+          <!-- Alterar Senha de Acesso -->
+          <div class="card form-card" style="grid-column: 1 / -1; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 24px;">🔑</span>
+              <h3 style="margin-bottom: 0;">Segurança e Senha de Acesso</h3>
+            </div>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+              Altere a sua senha de acesso a qualquer momento. Suas ocorrências e relatórios permanecem 100% preservados e vinculados à sua conta.
+            </p>
+            <form id="changePasswordForm" style="max-width: 460px;">
+              <div class="field" style="margin-bottom: 14px;">
+                <label for="pwdAtual">Senha atual</label>
+                <input type="password" id="pwdAtual" required placeholder="Digite sua senha atual">
+              </div>
+              <div class="field" style="margin-bottom: 14px;">
+                <label for="pwdNova">Nova senha (mínimo 4 dígitos)</label>
+                <input type="password" id="pwdNova" required minlength="4" placeholder="Digite a nova senha">
+              </div>
+              <div class="field" style="margin-bottom: 18px;">
+                <label for="pwdConfirm">Confirmar nova senha</label>
+                <input type="password" id="pwdConfirm" required minlength="4" placeholder="Repita a nova senha">
+              </div>
+              <button type="submit" class="btn btn-primary">Salvar nova senha</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL DE EDIÇÃO DE OCORRÊNCIA -->
+<!-- ============================================== -->
+<div class="modal-backdrop" id="modalEdit">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Editar ocorrência</h3>
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <form id="editForm">
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <div class="field">
+          <label for="editSetor">Setor *</label>
+          <input id="editSetor" required>
+        </div>
+        <div class="field">
+          <label for="editData">Data *</label>
+          <input id="editData" type="date" required>
+        </div>
+        <div class="field">
+          <label for="editTipo">Tipo do problema *</label>
+          <select id="editTipo" required>
+            <option value="Hardware">Hardware</option>
+            <option value="Software">Software</option>
+            <option value="Rede/Internet">Rede/Internet</option>
+            <option value="Impressão">Impressão</option>
+            <option value="Acesso/Usuário">Acesso/Usuário</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="editPrioridade">Prioridade *</label>
+          <select id="editPrioridade" required>
+            <option value="Normal">Normal</option>
+            <option value="Alta">Alta</option>
+            <option value="Urgente">Urgente</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="editStatus">Status *</label>
+          <select id="editStatus" required>
+            <option value="Aberto">Aberto</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Resolvido">Resolvido</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="editProblema">Descrição do problema *</label>
+          <textarea id="editProblema" required></textarea>
+        </div>
+        <div class="field full">
+          <label for="editDiagnostico">Diagnóstico da T.I.</label>
+          <textarea id="editDiagnostico"></textarea>
+        </div>
+        <div class="field full">
+          <label for="editFeito">O que foi feito / Providências realizadas</label>
+          <textarea id="editFeito"></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-light" onclick="closeEditModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar alterações</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO -->
+<!-- ============================================== -->
+<div class="modal-backdrop" id="modalDelete">
+  <div class="modal" style="max-width: 440px; text-align: center;">
+    <div style="font-size: 36px; color: var(--danger); margin-bottom: 12px;">⚠</div>
+    <h3 style="font-size: 18px; margin-bottom: 10px; color: var(--ink);">Confirmar exclusão</h3>
+    <p style="font-size: 13.5px; color: var(--muted); margin-bottom: 24px;">
+      Tem certeza de que deseja excluir permanentemente esta ocorrência? Esta ação não poderá ser desfeita.
+    </p>
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <button class="btn btn-light" onclick="closeDeleteModal()">Cancelar</button>
+      <button class="btn btn-danger" id="btnConfirmDelete">Sim, excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de Navegação Inferior para Celulares (Bottom Bar) -->
+<nav class="mobile-bottom-nav">
+  <button class="bottom-nav-item active" data-view="dashboard" onclick="showView('dashboard')">
+    <span class="nav-icon">⌂</span>
+    <span class="nav-label">Painel</span>
+  </button>
+  <button class="bottom-nav-item" data-view="novo" onclick="showView('novo')">
+    <span class="nav-icon">＋</span>
+    <span class="nav-label">Novo</span>
+  </button>
+  <button class="bottom-nav-item" data-view="historico" onclick="showView('historico')">
+    <span class="nav-icon">☷</span>
+    <span class="nav-label">Histórico</span>
+  </button>
+  <button class="bottom-nav-item" data-view="relatorio" onclick="showView('relatorio')">
+    <span class="nav-icon">▤</span>
+    <span class="nav-label">Relatório</span>
+  </button>
+  <button class="bottom-nav-item" data-view="config" onclick="showView('config')">
+    <span class="nav-icon">⚙</span>
+    <span class="nav-label">Ajustes</span>
+  </button>
+</nav>
+
+<!-- Container de Toasts -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/js/app.js?v=2"></script>
+</body>
+</html>
