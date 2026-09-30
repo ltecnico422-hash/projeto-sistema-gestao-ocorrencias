@@ -107,16 +107,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_relatorios_salvos_usuario ON relatorios_salvos (usuario_id);
 `);
 
-// Atribui registros históricos sem usuário ao usuário principal para nunca perder ocorrências
-try {
-  const adminUser = db.prepare('SELECT id FROM usuarios WHERE email = ?').get('ltecnico422@gmail.com') ||
-                    db.prepare('SELECT id FROM usuarios ORDER BY id ASC LIMIT 1').get();
-  if (adminUser) {
-    db.prepare('UPDATE ocorrencias SET usuario_id = ? WHERE usuario_id IS NULL').run(adminUser.id);
-  }
-} catch (e) {
-  // Ignora se tabela de usuários ainda não estiver pronta
-}
 
 // Garante que o registro padrão global de configurações exista (id = 1)
 const configExists = db.prepare('SELECT id FROM configuracoes WHERE id = 1').get();

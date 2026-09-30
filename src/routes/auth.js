@@ -43,37 +43,6 @@ router.post('/cadastro', (req, res) => {
       VALUES (?, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', ?, 'uploads/logo.png')
     `).run(userId, nomeNorm);
 
-    // Cria 2 ocorrências iniciais de boas-vindas para o usuário visualizar o sistema já populado
-    const today = new Date().toISOString().slice(0, 10);
-    const insertOc = db.prepare(`
-      INSERT INTO ocorrencias (usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertOc.run(
-      userId,
-      today,
-      'Pronto Atendimento',
-      'Hardware',
-      'Verificação preventiva dos computadores e impressoras da triagem.',
-      'Rotina inicial de checagem técnica.',
-      'Equipamentos testados, cabos organizados e impressoras operacionais.',
-      'Resolvido',
-      'Normal'
-    );
-
-    insertOc.run(
-      userId,
-      today,
-      'UTI Geral',
-      'Rede/Internet',
-      'Teste de conectividade do terminal de monitoramento.',
-      'Sinal estável.',
-      'Ponto de rede certificado e link ativo.',
-      'Resolvido',
-      'Normal'
-    );
-
     const token = generateToken({ id: userId, email: emailNorm });
 
     res.status(201).json({

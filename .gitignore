@@ -7,9 +7,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Arquivos transitórios do SQLite
+# Banco de Dados SQLite (nunca versionar para não sobrescrever dados de produção)
+data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+data/database.sqlite
 
 # Variáveis de ambiente locais
 .env
