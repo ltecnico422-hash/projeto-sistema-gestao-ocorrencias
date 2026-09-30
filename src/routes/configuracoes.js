@@ -144,4 +144,133 @@ router.get('/backup', (req, res) => {
   }
 });
 
+// GET /api/configuracoes/backup-json - Exporta backup completo do usuário em JSON
+router.get('/backup-json', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const config = getUserConfig(usuarioId, req.usuario.nome);
+    const ocorrencias = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data ASC, id ASC').all(usuarioId);
+    
+    let relatoriosSalvos = [];
+    try {
+      relatoriosSalvos = db.prepare('SELECT * FROM relatorios_salvos WHERE usuario_id = ? ORDER BY criado_em DESC').all(usuarioId);
+    } catch (e) {
+      // tabela pode não existir ainda se migration não rodou
+    }
+
+    const backupData = {
+      versao: '1.0',
+      gerado_em: new Date().toISOString(),
+      usuario: {
+        id: req.usuario.id,
+        nome: req.usuario.nome,
+        email: req.usuario.email
+      },
+      configuracoes: config,
+      ocorrencias: ocorrencias,
+      relatorios_salvos: relatoriosSalvos
+    };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const filename = `backup-ti-hospital-${todayStr}.json`;
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao gerar backup JSON.', detalhes: error.message });
+  }
+});
+
+// POST /api/configuracoes/restaurar-json - Restaura ocorrências e relatórios salvos a partir de arquivo JSON
+router.post('/restaurar-json', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const { ocorrencias, relatorios_salvos, configuracoes } = req.body;
+
+    if (!Array.isArray(ocorrencias) && !Array.isArray(relatorios_salvos) && !configuracoes) {
+      return res.status(400).json({ erro: 'Estrutura do arquivo de backup JSON inválida.' });
+    }
+
+    let ocorrenciasImportadas = 0;
+    let relatoriosImportados = 0;
+
+    // Atualiza configurações se presentes
+    if (configuracoes && (configuracoes.nome_hospital || configuracoes.setor || configuracoes.nome_responsavel)) {
+      db.prepare(`
+        UPDATE configuracoes_usuario
+        SET nome_hospital = COALESCE(?, nome_hospital),
+            setor = COALESCE(?, setor),
+            nome_responsavel = COALESCE(?, nome_responsavel),
+            atualizado_em = datetime('now', 'localtime')
+        WHERE usuario_id = ?
+      `).run(
+        configuracoes.nome_hospital || null,
+        configuracoes.setor || null,
+        configuracoes.nome_responsavel || null,
+        usuarioId
+      );
+    }
+
+    // Importa ocorrências
+    if (Array.isArray(ocorrencias) && ocorrencias.length > 0) {
+      const insertOc = db.prepare(`
+        INSERT INTO ocorrencias (
+          usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const oc of ocorrencias) {
+        if (oc.setor && oc.tipo_problema && oc.problema) {
+          insertOc.run(
+            usuarioId,
+            oc.data ? String(oc.data).slice(0, 10) : new Date().toISOString().slice(0, 10),
+            oc.setor.trim(),
+            oc.tipo_problema,
+            oc.problema.trim(),
+            oc.diagnostico ? oc.diagnostico.trim() : '',
+            oc.o_que_foi_feito ? oc.o_que_foi_feito.trim() : '',
+            oc.status || 'Aberto',
+            oc.prioridade || 'Normal'
+          );
+          ocorrenciasImportadas++;
+        }
+      }
+    }
+
+    // Importa relatórios salvos
+    if (Array.isArray(relatorios_salvos) && relatorios_salvos.length > 0) {
+      const insertRel = db.prepare(`
+        INSERT INTO relatorios_salvos (
+          usuario_id, tipo, titulo, periodo_inicio, periodo_fim, dados_json
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const r of relatorios_salvos) {
+        if (r.titulo && r.dados_json) {
+          const dadosStr = typeof r.dados_json === 'string' ? r.dados_json : JSON.stringify(r.dados_json);
+          insertRel.run(
+            usuarioId,
+            r.tipo || 'produtividade',
+            r.titulo,
+            r.periodo_inicio || null,
+            r.periodo_fim || null,
+            dadosStr
+          );
+          relatoriosImportados++;
+        }
+      }
+    }
+
+    res.json({
+      mensagem: 'Restauração de backup JSON concluída com sucesso!',
+      ocorrencias_importadas: ocorrenciasImportadas,
+      relatorios_importados: relatoriosImportados
+    });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao restaurar backup JSON.', detalhes: error.message });
+  }
+});
+
 module.exports = router;
+

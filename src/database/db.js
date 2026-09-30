@@ -72,6 +72,18 @@ db.exec(`
     formato TEXT CHECK (formato IN ('pdf', 'docx')),
     gerado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS relatorios_salvos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+    tipo TEXT NOT NULL DEFAULT 'produtividade',
+    titulo TEXT NOT NULL,
+    periodo_inicio TEXT,
+    periodo_fim TEXT,
+    dados_json TEXT NOT NULL,
+    criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // Migração segura para adicionar usuario_id se a tabela já existia sem essa coluna
@@ -92,6 +104,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_ocorrencias_data ON ocorrencias (data);
   CREATE INDEX IF NOT EXISTS idx_ocorrencias_status ON ocorrencias (status);
   CREATE INDEX IF NOT EXISTS idx_ocorrencias_prioridade ON ocorrencias (prioridade);
+  CREATE INDEX IF NOT EXISTS idx_relatorios_salvos_usuario ON relatorios_salvos (usuario_id);
 `);
 
 // Garante que o registro padrão global de configurações exista (id = 1)

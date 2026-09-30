@@ -488,76 +488,631 @@
       <!-- ============================================== -->
       <!-- 4. RELATÓRIO MENSAL -->
       <!-- ============================================== -->
+      <!-- ============================================== -->
+      <!-- 4. RELATÓRIOS (DOIS MODELOS DE EXPORTAÇÃO) -->
+      <!-- ============================================== -->
       <div id="relatorio" class="view">
-        <div class="title-row">
-          <div>
-            <div class="eyebrow">Documento gerencial oficial</div>
-            <h2>Relatório mensal de T.I.</h2>
-          </div>
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <div class="period-control">
-              <label>Período:</label>
-              <select id="reportMonthSelect"></select>
-              <select id="reportYearSelect"></select>
+        <!-- Seletor Moderno entre os Modelos de Relatório -->
+        <div class="report-model-selector-card">
+          <div class="selector-header">
+            <div class="selector-title">
+              <span class="selector-icon">📋</span>
+              <div>
+                <h3>Escolha o Modelo de Relatório</h3>
+                <p>Selecione o formato desejado para visualização, impressão ou download</p>
+              </div>
             </div>
-            <button class="btn btn-success" id="btnDownloadExcel">
-              ⇩ Baixar Excel (.xlsx)
+          </div>
+          <div class="report-model-cards-grid">
+            <button type="button" class="model-option-card active" id="tabReportExistingBtn" onclick="switchReportModel('existente')">
+              <div class="model-card-top">
+                <span class="model-card-badge">Modelo 1 — Gerencial</span>
+                <span class="model-check-circle">✓</span>
+              </div>
+              <div class="model-card-content">
+                <div class="model-card-icon">📊</div>
+                <div class="model-card-text">
+                  <h4>Modelo 1: Relatório Gerencial de Ocorrências</h4>
+                  <p>Documento gerencial consolidado com tabela completa de chamados do período, diagnósticos, providências e exportações em PDF, DOCX e XLSX.</p>
+                </div>
+              </div>
             </button>
-            <button class="btn btn-light" id="btnDownloadDocx">
-              ⇩ Baixar Word (.docx)
-            </button>
-            <button class="btn btn-primary" id="btnDownloadPdf">
-              ⇩ Baixar PDF
-            </button>
-            <button class="btn btn-light" onclick="window.print()">
-              🖶 Imprimir / A4
+
+            <button type="button" class="model-option-card" id="tabReportProductivityBtn" onclick="switchReportModel('produtividade')">
+              <div class="model-card-top">
+                <span class="model-card-badge official-badge">Modelo 2 — Oficial</span>
+                <span class="model-check-circle">✓</span>
+              </div>
+              <div class="model-card-content">
+                <div class="model-card-icon">📄</div>
+                <div class="model-card-text">
+                  <h4>Modelo 2: Relatório de Produtividade Oficial de T.I.</h4>
+                  <p>Layout idêntico ao modelo impresso oficial em 5 páginas A4, com cabeçalhos institucionais, gráficos de rosca, barras e pizza 3D, cabeamento e sobreaviso.</p>
+                </div>
+              </div>
             </button>
           </div>
         </div>
 
-        <!-- Folha de Relatório Oficial -->
-        <div class="report-box" id="reportPreview">
-          <div class="report-head">
-            <img id="reportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
-            <h2>RELATÓRIO MENSAL DE OCORRÊNCIAS DE T.I.</h2>
-            <p id="reportHospitalTitle">Hospital Regional Nossa Senhora do Bom Conselho</p>
+        <!-- ========================================================== -->
+        <!-- MODELO 1: RELATÓRIO GERENCIAL EXISTENTE -->
+        <!-- ========================================================== -->
+        <div id="reportModelExistingContainer">
+          <div class="title-row">
+            <div>
+              <div class="eyebrow">Documento gerencial oficial</div>
+              <h2>Relatório mensal de T.I.</h2>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <div class="period-control">
+                <label>Período:</label>
+                <select id="reportMonthSelect"></select>
+                <select id="reportYearSelect"></select>
+              </div>
+              <button class="btn btn-success" id="btnDownloadExcel">
+                ⇩ Baixar Excel (.xlsx)
+              </button>
+              <button class="btn btn-light" id="btnDownloadDocx">
+                ⇩ Baixar Word (.docx)
+              </button>
+              <button class="btn btn-primary" id="btnDownloadPdf">
+                ⇩ Baixar PDF
+              </button>
+              <button class="btn btn-light" onclick="window.print()">
+                🖶 Imprimir / A4
+              </button>
+            </div>
           </div>
 
-          <div class="report-meta">
-            <div><strong>Período:</strong> <span id="reportPeriodText">setembro de 2026</span></div>
-            <div><strong>Responsável:</strong> <span id="reportResponsibleText">Não informado</span></div>
-            <div><strong>Setor:</strong> <span id="reportSectorText">Tecnologia da Informação</span></div>
-            <div><strong>Emissão:</strong> <span id="reportIssueDate">21/09/2026</span></div>
+          <!-- Folha de Relatório Oficial Existente -->
+          <div class="report-box" id="reportPreview">
+            <div class="report-head">
+              <img id="reportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+              <h2>RELATÓRIO MENSAL DE OCORRÊNCIAS DE T.I.</h2>
+              <p id="reportHospitalTitle">Hospital Regional Nossa Senhora do Bom Conselho</p>
+            </div>
+
+            <div class="report-meta">
+              <div><strong>Período:</strong> <span id="reportPeriodText">setembro de 2026</span></div>
+              <div><strong>Responsável:</strong> <span id="reportResponsibleText">Não informado</span></div>
+              <div><strong>Setor:</strong> <span id="reportSectorText">Tecnologia da Informação</span></div>
+              <div><strong>Emissão:</strong> <span id="reportIssueDate">21/09/2026</span></div>
+            </div>
+
+            <div class="report-section">
+              <h4>1. Resumo executivo</h4>
+              <p id="reportExecutiveSummary">Carregando resumo...</p>
+              <div id="reportExecutiveList" style="margin-top: 14px;"></div>
+            </div>
+
+            <div class="report-section">
+              <h4>2. Indicadores do período</h4>
+              <table class="report-table">
+                <tbody>
+                  <tr><td>Total de ocorrências</td><td id="rTotal" style="text-align: right; font-weight: bold;">0</td></tr>
+                  <tr><td>Ocorrências resolvidas</td><td id="rResolved" style="text-align: right;">0</td></tr>
+                  <tr><td>Ocorrências em andamento</td><td id="rProgress" style="text-align: right;">0</td></tr>
+                  <tr><td>Ocorrências abertas</td><td id="rOpen" style="text-align: right;">0</td></tr>
+                  <tr><td>Alta prioridade / urgente</td><td id="rHigh" style="text-align: right;">0</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="report-section">
+              <h4>3. Observações</h4>
+              <p>Este relatório foi gerado automaticamente a partir dos registros do sistema de gestão de ocorrências da Tecnologia da Informação.</p>
+            </div>
+
+            <div class="signature">
+              Responsável pelo relatório<br>
+              <strong id="reportSigName">Nome do responsável</strong>
+              <span id="reportSigSector" style="color: #666; font-size: 11px;">Tecnologia da Informação</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- MODELO 2: RELATÓRIO DE PRODUTIVIDADE OFICIAL DE T.I. -->
+        <!-- ========================================================== -->
+        <div id="reportModelProductivityContainer" style="display: none;">
+          <div class="title-row">
+            <div>
+              <div class="eyebrow">Modelo Oficial Hospitalar — Arapiraca</div>
+              <h2>Relatório de Produtividade – Tecnologia da Informação</h2>
+            </div>
           </div>
 
-          <div class="report-section">
-            <h4>1. Resumo executivo</h4>
-            <p id="reportExecutiveSummary">Carregando resumo...</p>
-            <div id="reportExecutiveList" style="margin-top: 14px;"></div>
+          <!-- Painel de Configurações do Relatório de Produtividade (Salvo no Navegador) -->
+          <div class="card prod-control-panel" style="margin-bottom: 24px; padding: 20px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 14px; color: var(--blue); display: flex; align-items: center; gap: 8px;">
+              <span>⚙</span> Parâmetros de Emissão e Identificação (salvos automaticamente no navegador)
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+              <!-- Seletor de Período -->
+              <div class="field">
+                <label style="font-weight: 600; font-size: 12px;">Modo de Período:</label>
+                <div style="display: flex; gap: 12px; margin-top: 4px; align-items: center;">
+                  <label style="font-size: 13px; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <input type="radio" name="prodPeriodMode" value="month" checked onchange="toggleProdPeriodMode()"> Mês/Ano
+                  </label>
+                  <label style="font-size: 13px; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <input type="radio" name="prodPeriodMode" value="custom" onchange="toggleProdPeriodMode()"> Personalizado
+                  </label>
+                </div>
+              </div>
+
+              <!-- Controles Mês / Ano -->
+              <div class="field" id="prodMonthControls">
+                <label style="font-weight: 600; font-size: 12px;">Mês / Ano:</label>
+                <div style="display: flex; gap: 8px; margin-top: 2px;">
+                  <select id="prodMonthSelect" style="flex: 1; padding: 7px;"></select>
+                  <select id="prodYearSelect" style="flex: 1; padding: 7px;"></select>
+                </div>
+              </div>
+
+              <!-- Controles Personalizados Data Início e Fim -->
+              <div class="field" id="prodCustomControls" style="display: none;">
+                <label style="font-weight: 600; font-size: 12px;">Data Início e Fim:</label>
+                <div style="display: flex; gap: 8px; margin-top: 2px;">
+                  <input type="date" id="prodDataInicio" style="flex: 1; padding: 6px;">
+                  <input type="date" id="prodDataFim" style="flex: 1; padding: 6px;">
+                </div>
+              </div>
+
+              <!-- Unidade / Setor -->
+              <div class="field">
+                <label for="prodCfgSetor" style="font-weight: 600; font-size: 12px;">Unidade / Setor:</label>
+                <input type="text" id="prodCfgSetor" value="Núcleo de Tecnologia da Informação" placeholder="Ex.: Núcleo de Tecnologia da Informação">
+              </div>
+
+              <!-- Responsável -->
+              <div class="field">
+                <label for="prodCfgResponsavel" style="font-weight: 600; font-size: 12px;">Responsável:</label>
+                <input type="text" id="prodCfgResponsavel" placeholder="Nome completo do responsável">
+              </div>
+
+              <!-- Cargo -->
+              <div class="field">
+                <label for="prodCfgCargo" style="font-weight: 600; font-size: 12px;">Cargo:</label>
+                <input type="text" id="prodCfgCargo" value="Técnico de Tecnologia da Informação" placeholder="Ex.: Técnico de Tecnologia da Informação">
+              </div>
+
+              <!-- Data de Emissão -->
+              <div class="field">
+                <label for="prodCfgEmissao" style="font-weight: 600; font-size: 12px;">Data de Emissão:</label>
+                <input type="text" id="prodCfgEmissao" placeholder="dd/mm/aaaa">
+              </div>
+
+              <!-- Segmento de Atuação -->
+              <div class="field" style="grid-column: 1 / -1;">
+                <label for="prodCfgSegmento" style="font-weight: 600; font-size: 12px;">Segmento de Atuação:</label>
+                <input type="text" id="prodCfgSegmento" value="manutenção, suporte ao usuário e infraestrutura" placeholder="Ex.: manutenção, suporte ao usuário e infraestrutura">
+              </div>
+            </div>
+
+            <!-- Botões de Ações do Relatório de Produtividade -->
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 14px;">
+              <button type="button" class="btn btn-primary" id="btnGenerateProdReport" onclick="generateProductivityReport()">
+                ⚡ Gerar do Período
+              </button>
+              <button type="button" class="btn btn-light" id="btnLoadReferenceTemplate" onclick="loadReferenceTemplateData()" title="Preencher com o exemplo exato das 5 imagens enviadas">
+                📋 Preencher Modelo das Imagens
+              </button>
+              <button type="button" class="btn btn-success" id="btnSaveProdReport" onclick="saveProductivityReportToHistory()">
+                💾 Salvar no histórico
+              </button>
+              <button type="button" class="btn btn-light" id="btnOpenSavedReportsModal" onclick="openSavedReportsModal()">
+                📜 Relatórios salvos (<span id="savedReportsCount">0</span>)
+              </button>
+              <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-light" id="btnExportProdDocx" onclick="exportProductivityDocx()">
+                  📄 Word (.docx)
+                </button>
+                <button type="button" class="btn btn-light" id="btnExportProdDoc" onclick="exportProductivityWordDoc()">
+                  📝 Word (.doc)
+                </button>
+                <button type="button" class="btn btn-primary" id="btnExportProdPdf" onclick="printProductivityReport()">
+                  🖶 Imprimir / Salvar PDF
+                </button>
+              </div>
+            </div>
+
+            <div style="margin-top: 12px; font-size: 12.5px; color: var(--ink-light); background: #f0f7ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #cce3fd;">
+              💡 <strong>Edição em tempo real habilitada:</strong> Todos os textos, indicadores numéricos, tabelas e itens nas 5 páginas abaixo são editáveis. Clique e altere diretamente qualquer trecho antes de salvar ou imprimir!
+            </div>
           </div>
 
-          <div class="report-section">
-            <h4>2. Indicadores do período</h4>
-            <table class="report-table">
-              <tbody>
-                <tr><td>Total de ocorrências</td><td id="rTotal" style="text-align: right; font-weight: bold;">0</td></tr>
-                <tr><td>Ocorrências resolvidas</td><td id="rResolved" style="text-align: right;">0</td></tr>
-                <tr><td>Ocorrências em andamento</td><td id="rProgress" style="text-align: right;">0</td></tr>
-                <tr><td>Ocorrências abertas</td><td id="rOpen" style="text-align: right;">0</td></tr>
-                <tr><td>Alta prioridade / urgente</td><td id="rHigh" style="text-align: right;">0</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <!-- ========================================================== -->
+          <!-- PRÉVIA EM 5 FOLHAS A4 OFICIAIS DO HOSPITAL REGIONAL -->
+          <!-- ========================================================== -->
+          <div class="sheet-viewport-wrapper">
+            <div class="a4-productivity-sheet productivity-multi-pages-wrapper" id="productivityReportSheet">
 
-          <div class="report-section">
-            <h4>3. Observações</h4>
-            <p>Este relatório foi gerado automaticamente a partir dos registros do sistema de gestão de ocorrências da Tecnologia da Informação.</p>
-          </div>
+              <!-- ====================================================== -->
+              <!-- PÁGINA 1 DE 5 -->
+              <!-- ====================================================== -->
+              <div class="a4-page" id="prodPage1" data-page="1">
+                <div class="a4-page-body">
+                  <!-- Cabeçalho Institucional -->
+                  <div class="sheet-header">
+                    <div class="sheet-logo-col">
+                      <img class="prodReportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+                    </div>
+                    <div class="sheet-org-header">
+                      <strong>ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO</strong>
+                      <span>Entidade Mantenedora do Hospital Regional de Arapiraca</span>
+                    </div>
+                  </div>
 
-          <div class="signature">
-            Responsável pelo relatório<br>
-            <strong id="reportSigName">Nome do responsável</strong>
-            <span id="reportSigSector" style="color: #666; font-size: 11px;">Tecnologia da Informação</span>
+                  <!-- Título Centralizado -->
+                  <h2 class="sheet-main-title">RELATÓRIO DE PRODUTIVIDADE - TECNOLOGIA DA INFORMAÇÃO</h2>
+
+                  <!-- 1. Identificação -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">1. Identificação</h3>
+                    <ul class="doc-list doc-bullet-list">
+                      <li><strong>Periodo Avaliado:</strong> <span id="prodDocPeriodo" contenteditable="true">01/07 Até 31/07</span></li>
+                      <li><strong>Unidade/Setor:</strong> <span id="prodDocSetor" contenteditable="true">Núcleo de Tecnologia da Informação</span></li>
+                      <li><strong>Responsável:</strong> <span id="prodDocResponsavel" contenteditable="true">Northon Ernandes Vital da Silva</span></li>
+                      <li><strong>Data de Emissão:</strong> <span id="prodDocEmissao" contenteditable="true">30/07/2026</span></li>
+                    </ul>
+                  </div>
+
+                  <!-- 2. Objetivo -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">2. Objetivo</h3>
+                    <p id="prodDocObjetivo" class="doc-para" contenteditable="true">
+                      Apresentar as atividades executadas pelo colaborador <strong class="doc-name-blue"><span id="prodDocObjetivoResp">Northon Ernandes Vital da Silva</span></strong> no Seguimento de <span id="prodDocObjetivoSeg">manutenção, suporte ao usuário e infraestrutura</span> durante o período avaliado, evidenciando os serviços prestados, melhorias implementadas e resultados obtidos.
+                    </p>
+                  </div>
+
+                  <!-- 3. Atividades Desenvolvidas -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">3. Atividades Desenvolvidas:</h3>
+                    <ul id="prodDocAtividadesList" class="doc-list doc-bullet-list" contenteditable="true">
+                      <li>Projeto de Manutenção Preventiva (Ajustes e adições de recurso);</li>
+                      <li>Planejamento de inventário do setor de T.I (Atualizado no mês vigente);</li>
+                      <li>Ajustes nas ações de suporte ao usuário;</li>
+                      <li>Inicio do projeto da plataforma de ensino Mente Informatizada;</li>
+                      <li>Desenvolvimento da ferramenta de gerenciamento de racks;</li>
+                      <li>Correção de estruturas de cabos em setores específicos.</li>
+                    </ul>
+                  </div>
+
+                  <!-- 3.1 Manutenção Preventiva -->
+                  <div class="doc-section">
+                    <h4 class="doc-subsec-title">3.1 Manutenção Preventiva</h4>
+                    <ul id="prodDocPreventivaList" class="doc-list doc-bullet-list" contenteditable="true">
+                      <li>O projeto se manteve em hiato no mês de agosto por motivos de demandas mais urgentes.</li>
+                      <li>O projeto segue em finalização no próximo mês de setembro.</li>
+                      <li>Apenas 10% restante para finalizar o primeiro semestre de preventiva;</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Rodapé Oficial Página 1 -->
+                <div class="sheet-footer">
+                  <div class="sheet-footer-line"></div>
+                  <div class="sheet-footer-content">
+                    <div class="sheet-footer-left">Rua São Francisco, 154, Centro, Arapiraca – Alagoas</div>
+                    <div class="sheet-footer-right">Página 1 de 5</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ====================================================== -->
+              <!-- PÁGINA 2 DE 5 -->
+              <!-- ====================================================== -->
+              <div class="a4-page" id="prodPage2" data-page="2">
+                <div class="a4-page-body">
+                  <!-- Cabeçalho Institucional -->
+                  <div class="sheet-header">
+                    <div class="sheet-logo-col">
+                      <img class="prodReportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+                    </div>
+                    <div class="sheet-org-header">
+                      <strong>ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO</strong>
+                      <span>Entidade Mantenedora do Hospital Regional de Arapiraca</span>
+                    </div>
+                  </div>
+
+                  <!-- 3.2 Suporte ao Usuário -->
+                  <div class="doc-section">
+                    <h4 class="doc-subsec-title">3.2 Suporte ao Usuário</h4>
+                    <ul class="doc-list doc-bullet-list" style="margin-bottom: 8px;">
+                      <li><strong>Quantidade de chamados atendidos:</strong></li>
+                    </ul>
+
+                    <!-- Card do Gráfico de Rosca (Donut) -->
+                    <div class="report-chart-card">
+                      <div class="chart-card-title" id="prodDonutTitle" contenteditable="true">Chamados Agosto</div>
+                      <div id="prodDonutContainer" class="chart-render-area">
+                        <!-- SVG renderizado via script -->
+                      </div>
+                    </div>
+
+                    <ul class="doc-list doc-bullet-list" style="margin-top: 18px; margin-bottom: 8px;">
+                      <li><strong>Atendimentos:</strong></li>
+                    </ul>
+
+                    <!-- Card do Gráfico de Barras Horizontais -->
+                    <div class="report-chart-card">
+                      <div class="chart-card-title">Tipos de Chamados</div>
+                      <div id="prodHBarContainer" class="chart-render-area">
+                        <!-- SVG renderizado via script -->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Rodapé Oficial Página 2 -->
+                <div class="sheet-footer">
+                  <div class="sheet-footer-line"></div>
+                  <div class="sheet-footer-content">
+                    <div class="sheet-footer-left">
+                      <div>Rua São Francisco, 154, Centro, Arapiraca – Alagoas</div>
+                      <div>CEP: 57300 – 080, Fone: (82) 4004 1010</div>
+                      <div>CNPJ: 24.177.305/0001-31</div>
+                    </div>
+                    <div class="sheet-footer-right">Página 2 de 5</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ====================================================== -->
+              <!-- PÁGINA 3 DE 5 -->
+              <!-- ====================================================== -->
+              <div class="a4-page" id="prodPage3" data-page="3">
+                <div class="a4-page-body">
+                  <!-- Cabeçalho Institucional -->
+                  <div class="sheet-header">
+                    <div class="sheet-logo-col">
+                      <img class="prodReportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+                    </div>
+                    <div class="sheet-org-header">
+                      <strong>ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO</strong>
+                      <span>Entidade Mantenedora do Hospital Regional de Arapiraca</span>
+                    </div>
+                  </div>
+
+                  <!-- Atendimentos Remotos Texto -->
+                  <div class="doc-section">
+                    <ul class="doc-list doc-bullet-list" style="margin-bottom: 14px;">
+                      <li>
+                        <strong id="prodDocRemotosTexto" contenteditable="true">Atendimentos remotos: Atendimentos presenciais tiveram crescimento considerável por motivos de ação física necessária, mas o uso da resolutiva remota ainda segue crescendo.</strong>
+                      </li>
+                    </ul>
+
+                    <!-- Principais Demandas Solucionadas -->
+                    <h4 class="doc-demandas-title">Principais demandas solucionadas:</h4>
+                    <div id="prodDocDemandasContainer" class="demandas-solucionadas-list" contenteditable="true">
+                      <p class="demanda-item">Correção de estruturas de Rede</p>
+                      <p class="demanda-item">Corretiva em estações de trabalho</p>
+                      <p class="demanda-item">Aquisição de ferramentas e insumos para melhoria da qualidade de trabalho (<span class="blue-link-text">Novo alicate de crimpagem.</span>)</p>
+                      <p class="demanda-item">Orientação e direcionamento no uso das estações de trabalho</p>
+                      <p class="demanda-item">Correção de problemas de ponto</p>
+                      <p class="demanda-item">Correção de problemas de sistema (MV SOUL)</p>
+                      <p class="demanda-item">Suporte ao usuário</p>
+                      <p class="demanda-item">Compras e cotações</p>
+                      <p class="demanda-item">Manutenção e montagem</p>
+                      <p class="demanda-item">Conserto de equipamentos diversos</p>
+                    </div>
+                  </div>
+
+                  <!-- 3.3 Implantação e Manutenção de Infraestrutura de Rede -->
+                  <div class="doc-section" style="margin-top: 14px;">
+                    <h4 class="doc-subsec-title">3.3 Implantação e Manutenção de Infraestrutura de Rede</h4>
+                    <ul class="doc-list doc-bullet-list" style="margin-bottom: 6px;">
+                      <li><strong>Organização de cabeamento estruturado:</strong></li>
+                    </ul>
+
+                    <!-- Tabela Setor com cabeçalho azul e bordas pretas -->
+                    <table class="cabeamento-table" id="prodTableCabeamento">
+                      <thead>
+                        <tr><th class="table-header-blue">Setor</th></tr>
+                      </thead>
+                      <tbody id="prodTbodyCabeamento">
+                        <tr><td contenteditable="true">Clinica Médica</td></tr>
+                        <tr><td contenteditable="true">Clinica Cirúrgica</td></tr>
+                        <tr><td contenteditable="true">Maternidade</td></tr>
+                        <tr><td contenteditable="true">Posto 1º Andar</td></tr>
+                        <tr><td contenteditable="true">&nbsp;</td></tr>
+                      </tbody>
+                    </table>
+
+                    <ul class="doc-list doc-bullet-list" style="margin-top: 12px; margin-bottom: 4px;">
+                      <li><strong>Expansão ou adequação da infraestrutura:</strong></li>
+                    </ul>
+                    <p id="prodDocExpansaoTexto" class="doc-para" contenteditable="true" style="margin-left: 20px;">
+                      Expansão nas estações de trabalho no mês de agosto para setores específicos que careciam de mais máquinas para aumentar a produtividade.
+                    </p>
+                    <p class="doc-para" style="margin-left: 20px; font-weight: bold;">
+                      Equipamentos entregues: <span id="prodDocEquipEntregues" contenteditable="true">6 novas entregues</span>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Rodapé Oficial Página 3 -->
+                <div class="sheet-footer">
+                  <div class="sheet-footer-line"></div>
+                  <div class="sheet-footer-content">
+                    <div class="sheet-footer-left">
+                      <div>Rua São Francisco, 154, Centro, Arapiraca – Alagoas</div>
+                      <div>CEP: 57300 – 080, Fone: (82) 4004 1010</div>
+                      <div>CNPJ: 24.177.305/0001-31</div>
+                    </div>
+                    <div class="sheet-footer-right">Página 3 de 5</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ====================================================== -->
+              <!-- PÁGINA 4 DE 5 -->
+              <!-- ====================================================== -->
+              <div class="a4-page" id="prodPage4" data-page="4">
+                <div class="a4-page-body">
+                  <!-- Cabeçalho Institucional -->
+                  <div class="sheet-header">
+                    <div class="sheet-logo-col">
+                      <img class="prodReportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+                    </div>
+                    <div class="sheet-org-header">
+                      <strong>ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO</strong>
+                      <span>Entidade Mantenedora do Hospital Regional de Arapiraca</span>
+                    </div>
+                  </div>
+
+                  <!-- Bullets de Equipamentos -->
+                  <div class="doc-section">
+                    <ul class="doc-list doc-bullet-list">
+                      <li><strong>Equipamentos remanejados:</strong> <span id="prodDocEquipRemanejados" contenteditable="true">Sem equipamentos remanejados</span></li>
+                      <li>
+                        <strong>Equipamentos recolhidos:</strong>
+                        <div id="prodDocEquipRecolhidos" contenteditable="true" style="margin-top: 4px; font-weight: bold;">Teclados e mouses com falhas ou fora do padrão</div>
+                      </li>
+                      <li><strong>Atualização de inventário patrimonial:</strong> <span id="prodDocInventario" contenteditable="true">Em progresso</span></li>
+                    </ul>
+                  </div>
+
+                  <!-- 3.5 Demandas Adicionais -->
+                  <div class="doc-section" style="margin-top: 18px;">
+                    <h4 class="doc-subsec-title">3.5 Demandas Adicionais</h4>
+                    <p class="doc-subtitle-parenthesis">(Descrever atividades extraordinárias ou não previstas inicialmente.)</p>
+                    
+                    <div class="demandas-adicionais-box" id="prodDocDemandasAdicionaisBox">
+                      <div class="demanda-adic-row" contenteditable="true">
+                        <span class="bullet-dot">•</span> Correções de última hora após queda de energia
+                      </div>
+                      <hr class="demanda-divider">
+                      <div class="demanda-adic-row" contenteditable="true">
+                        <span class="bullet-dot">•</span> Suporte a terceirizados
+                      </div>
+                      <hr class="demanda-divider">
+                      <div class="demanda-adic-row" contenteditable="true">
+                        <span class="bullet-dot">•</span> Falhas de energia
+                      </div>
+                      <hr class="demanda-divider">
+                    </div>
+                  </div>
+
+                  <!-- 4. Indicadores de Produtividade -->
+                  <div class="doc-section" style="margin-top: 22px;">
+                    <h3 class="doc-sec-title">4. Indicadores de Produtividade</h3>
+                    <ul class="doc-list doc-bullet-list doc-indicadores-prod">
+                      <li>
+                        <strong>Total de manutenções preventivas realizadas:</strong>
+                        <div class="indicador-arrow-val">➔ <span id="prodDocIndManutencao" contenteditable="true">Mais de 130 estações de trabalho</span></div>
+                      </li>
+                      <li>
+                        <strong>Total de atendimentos aos usuários:</strong>
+                        <div class="indicador-arrow-val">➔ <span id="prodDocIndAtendimentos" contenteditable="true">Entre 50 a 70 atendimentos no mês</span></div>
+                      </li>
+                      <li>
+                        <strong>Total de intervenções em infraestrutura de rede:</strong>
+                        <div class="indicador-arrow-val">➔ <span id="prodDocIndIntervencoes" contenteditable="true">No mês de maio por volta de 6 a 9 modificações<br>5 a 9 correções</span></div>
+                      </li>
+                      <li>
+                        <strong>Total de equipamentos alocados/remanejados:</strong>
+                        <div class="indicador-arrow-val">➔ <span id="prodDocIndEquipamentos" contenteditable="true">Total de 6 equipamentos alocados</span></div>
+                      </li>
+                      <li>
+                        <strong>Total de outras demandas executadas:</strong>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Rodapé Oficial Página 4 -->
+                <div class="sheet-footer">
+                  <div class="sheet-footer-line"></div>
+                  <div class="sheet-footer-content">
+                    <div class="sheet-footer-left">
+                      <div>Rua São Francisco, 154, Centro, Arapiraca – Alagoas</div>
+                      <div>CEP: 57300 – 080, Fone: (82) 4004 1010</div>
+                      <div>CNPJ: 24.177.305/0001-31</div>
+                    </div>
+                    <div class="sheet-footer-right">Página 4 de 5</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ====================================================== -->
+              <!-- PÁGINA 5 DE 5 -->
+              <!-- ====================================================== -->
+              <div class="a4-page" id="prodPage5" data-page="5">
+                <div class="a4-page-body">
+                  <!-- Cabeçalho Institucional -->
+                  <div class="sheet-header">
+                    <div class="sheet-logo-col">
+                      <img class="prodReportLogo" src="/uploads/logo.png" alt="Logotipo do Hospital" onerror="this.style.display='none'">
+                    </div>
+                    <div class="sheet-org-header">
+                      <strong>ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO</strong>
+                      <span>Entidade Mantenedora do Hospital Regional de Arapiraca</span>
+                    </div>
+                  </div>
+
+                  <!-- Continuação do item 4 (Outras Demandas) -->
+                  <div style="margin-bottom: 18px; margin-left: 20px;">
+                    <div class="indicador-arrow-val">➔ <span id="prodDocIndOutras" contenteditable="true">Por volta de 8 ou menos fora do seguimento de T.I, como: Consultorias de preço e consertos, Instalações e conserto fora do segmento de T.I.)</span></div>
+                  </div>
+
+                  <!-- 5. Resultados Obtidos -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">5. Resultados Obtidos:</h3>
+                    <p id="prodDocResultados" class="doc-para" contenteditable="true">
+                      Foram obtidos diversos resultados benéficos após as medidas aplicadas já mencionadas anteriormente, como: melhoria do desempenho das estações de trabalho, melhoria na comunicação setor e paciente, facilidade de movimentação e comunicação dentro dos setores, estica e funcionalidade melhoradas.
+                    </p>
+                  </div>
+
+                  <!-- 6. Dificuldades Encontradas -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">6. Dificuldades Encontradas:</h3>
+                    <p id="prodDocDificuldades" class="doc-para" contenteditable="true">
+                      Muita movimentação nos setores com críticas, comunicação falha ou incompleta por parte do usuário, estrutura predial defeituosa ou com falhas, instalações antigas erradas ou inacessíveis.
+                    </p>
+                  </div>
+
+                  <!-- 7. Atendimentos no período de sobreaviso nos finais de semana -->
+                  <div class="doc-section">
+                    <h3 class="doc-sec-title">7. Atendimentos no período de sobreaviso nos finais de semana;</h3>
+                    
+                    <!-- Card do Gráfico de Pizza 3D -->
+                    <div class="report-chart-card">
+                      <div class="chart-card-title">Chamados por Setor</div>
+                      <div id="prodPie3dContainer" class="chart-render-area">
+                        <!-- SVG 3D renderizado via script -->
+                      </div>
+                    </div>
+
+                    <h4 class="doc-subsec-title" style="margin-top: 14px;">Principais ocorrências:</h4>
+                    <ul id="prodDocSobreavisoList" class="doc-list doc-bullet-list" contenteditable="true">
+                      <li>Usuários sem conhecimento básico em informática;</li>
+                      <li>Ações executadas sem orientação ou suporte prévio do T.I;</li>
+                      <li>Erros por parte de outros setores que afetam os demais;</li>
+                      <li>Falta de comunicação entre colaboradores do mesmo setor;</li>
+                      <li>Ações incompletas como: Prescrições e Evoluções em Aberto, altas não realizadas ocorrendo ocupações de leitos indevidas;</li>
+                      <li>Analise simples do problema, como: verificar se os equipamentos estão ligados, pressionar os botões de ligar e desligar corretamente e informar se houve problemas elétricos;</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Rodapé Oficial Página 5 -->
+                <div class="sheet-footer">
+                  <div class="sheet-footer-line"></div>
+                  <div class="sheet-footer-content">
+                    <div class="sheet-footer-left">
+                      <div>Rua São Francisco, 154, Centro, Arapiraca – Alagoas</div>
+                      <div>CEP: 57300 – 080, Fone: (82) 4004 1010</div>
+                      <div>CNPJ: 24.177.305/0001-31</div>
+                    </div>
+                    <div class="sheet-footer-right">Página 5 de 5</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
@@ -641,6 +1196,29 @@
               </button>
               <span style="font-size: 12px; color: var(--green-dark); font-weight: 600;">
                 ✓ Cópia consistente e pronta para restauração imediata
+              </span>
+            </div>
+          </div>
+
+          <!-- Backup e Restauração em Formato JSON (Inclui Relatórios Salvos) -->
+          <div class="card" style="grid-column: 1 / -1; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 24px;">📦</span>
+              <h3 style="margin-bottom: 0;">Backup e Restauração Completa em JSON</h3>
+            </div>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+              Exporte ou restaure suas ocorrências, configurações e relatórios salvos em formato universal <code>.json</code>. Ideal para portabilidade, auditoria e sincronização entre máquinas.
+            </p>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-success" id="btnDownloadJsonBackup" onclick="downloadJsonBackup()">
+                ⬇ Exportar Backup (.json)
+              </button>
+              <button type="button" class="btn btn-light" onclick="$('inputRestoreJson').click()">
+                ⬆ Restaurar de Backup (.json)
+              </button>
+              <input type="file" id="inputRestoreJson" accept=".json,application/json" style="display: none;" onchange="handleRestoreJsonFile(event)">
+              <span style="font-size: 12px; color: var(--muted);">
+                Compatível com backup offline e relatórios de produtividade
               </span>
             </div>
           </div>
@@ -758,6 +1336,41 @@
     <div style="display: flex; gap: 12px; justify-content: center;">
       <button class="btn btn-light" onclick="closeDeleteModal()">Cancelar</button>
       <button class="btn btn-danger" id="btnConfirmDelete">Sim, excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL DE HISTÓRICO DE RELATÓRIOS SALVOS -->
+<!-- ============================================== -->
+<div class="modal-backdrop" id="modalSavedReports">
+  <div class="modal" style="max-width: 680px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 style="margin: 0; font-size: 18px; color: var(--ink);">📜 Relatórios Salvos no Histórico</h3>
+      <button type="button" class="btn btn-light" style="padding: 4px 10px;" onclick="closeSavedReportsModal()">✕ Fechar</button>
+    </div>
+    <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+      Aqui estão os relatórios gerados e personalizados que você salvou. Você pode reabrir qualquer versão, continuar editando e reexportar para Word ou PDF.
+    </p>
+
+    <div style="max-height: 380px; overflow-y: auto;">
+      <table class="table" style="width: 100%; font-size: 13px;">
+        <thead>
+          <tr>
+            <th>Título / Período</th>
+            <th>Tipo</th>
+            <th>Salvo em</th>
+            <th style="text-align: right;">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="savedReportsTableBody">
+          <tr><td colspan="4" class="empty">Nenhum relatório salvo no histórico ainda.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+      <button type="button" class="btn btn-light" onclick="closeSavedReportsModal()">Fechar</button>
     </div>
   </div>
 </div>

@@ -9,21 +9,32 @@ router.use(authMiddleware);
 // GET /api/ocorrencias - Listagem das ocorrências do usuário com filtros
 router.get('/', (req, res) => {
   try {
-    const { mes, ano, status, prioridade, busca } = req.query;
+    const { mes, ano, status, prioridade, busca, data_inicio, data_fim } = req.query;
     const usuarioId = req.usuario.id;
 
     let query = `SELECT * FROM ocorrencias WHERE usuario_id = ?`;
     const params = [usuarioId];
 
-    if (ano) {
-      query += ` AND strftime('%Y', data) = ?`;
-      params.push(String(ano));
-    }
+    if (data_inicio && data_fim) {
+      query += ` AND data >= ? AND data <= ?`;
+      params.push(String(data_inicio).slice(0, 10), String(data_fim).slice(0, 10));
+    } else if (data_inicio) {
+      query += ` AND data >= ?`;
+      params.push(String(data_inicio).slice(0, 10));
+    } else if (data_fim) {
+      query += ` AND data <= ?`;
+      params.push(String(data_fim).slice(0, 10));
+    } else {
+      if (ano) {
+        query += ` AND strftime('%Y', data) = ?`;
+        params.push(String(ano));
+      }
 
-    if (mes) {
-      const formattedMonth = String(mes).padStart(2, '0');
-      query += ` AND strftime('%m', data) = ?`;
-      params.push(formattedMonth);
+      if (mes) {
+        const formattedMonth = String(mes).padStart(2, '0');
+        query += ` AND strftime('%m', data) = ?`;
+        params.push(formattedMonth);
+      }
     }
 
     if (status) {

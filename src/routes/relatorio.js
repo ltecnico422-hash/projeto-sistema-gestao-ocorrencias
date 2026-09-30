@@ -13,7 +13,11 @@ const {
   TableCell,
   AlignmentType,
   WidthType,
-  ImageRun
+  ImageRun,
+  BorderStyle,
+  Header,
+  Footer,
+  PageNumber
 } = require('docx');
 const db = require('../database/db');
 const authMiddleware = require('../middleware/auth');
@@ -25,13 +29,8 @@ const MONTH_NAMES = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ];
 
-function getReportData(mesParam, anoParam, usuario) {
+function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataFimParam) {
   const today = new Date();
-  const ano = anoParam ? String(anoParam) : String(today.getFullYear());
-  const mes = mesParam
-    ? String(mesParam).padStart(2, '0')
-    : String(today.getMonth() + 1).padStart(2, '0');
-
   const usuarioId = usuario.id;
 
   // Busca configurações personalizadas do usuário ou cria padrão
@@ -45,48 +44,42 @@ function getReportData(mesParam, anoParam, usuario) {
     };
   }
 
+  let ano, mes, periodoLabel, queryWhere, queryParams;
+
+  if (dataInicioParam && dataFimParam) {
+    const dIni = String(dataInicioParam).slice(0, 10);
+    const dFim = String(dataFimParam).slice(0, 10);
+    queryWhere = `usuario_id = ? AND data >= ? AND data <= ?`;
+    queryParams = [usuarioId, dIni, dFim];
+    ano = Number(dFim.slice(0, 4));
+    mes = Number(dFim.slice(5, 7));
+    periodoLabel = `${dIni.split('-').reverse().join('/')} até ${dFim.split('-').reverse().join('/')}`;
+  } else {
+    ano = anoParam ? String(anoParam) : String(today.getFullYear());
+    mes = mesParam
+      ? String(mesParam).padStart(2, '0')
+      : String(today.getMonth() + 1).padStart(2, '0');
+    queryWhere = `usuario_id = ? AND strftime('%Y', data) = ? AND strftime('%m', data) = ?`;
+    queryParams = [usuarioId, String(ano), String(mes)];
+    const mesNum = parseInt(mes, 10);
+    const mesExtenso = MONTH_NAMES[mesNum - 1] || mes;
+    periodoLabel = `${mesExtenso} de ${ano}`;
+  }
+
   // Indicadores exclusivos do usuário
-  const total = db.prepare(`
-    SELECT COUNT(*) as count FROM ocorrencias
-    WHERE usuario_id = ?
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
-  `).get(usuarioId, ano, mes).count;
-
-  const resolvidas = db.prepare(`
-    SELECT COUNT(*) as count FROM ocorrencias
-    WHERE usuario_id = ? AND status = 'Resolvido'
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
-  `).get(usuarioId, ano, mes).count;
-
-  const emAndamento = db.prepare(`
-    SELECT COUNT(*) as count FROM ocorrencias
-    WHERE usuario_id = ? AND status = 'Em andamento'
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
-  `).get(usuarioId, ano, mes).count;
-
-  const abertas = db.prepare(`
-    SELECT COUNT(*) as count FROM ocorrencias
-    WHERE usuario_id = ? AND status = 'Aberto'
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
-  `).get(usuarioId, ano, mes).count;
-
-  const altaPrioridade = db.prepare(`
-    SELECT COUNT(*) as count FROM ocorrencias
-    WHERE usuario_id = ? AND prioridade IN ('Alta', 'Urgente')
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
-  `).get(usuarioId, ano, mes).count;
+  const total = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere}`).get(...queryParams).count;
+  const resolvidas = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Resolvido'`).get(...queryParams).count;
+  const emAndamento = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Em andamento'`).get(...queryParams).count;
+  const abertas = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Aberto'`).get(...queryParams).count;
+  const altaPrioridade = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND prioridade IN ('Alta', 'Urgente')`).get(...queryParams).count;
 
   // Lista de ocorrências do usuário ordenada decrescente por data e ID
   const ocorrencias = db.prepare(`
     SELECT * FROM ocorrencias
-    WHERE usuario_id = ?
-      AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+    WHERE ${queryWhere}
     ORDER BY data DESC, id DESC
-  `).all(usuarioId, ano, mes);
+  `).all(...queryParams);
 
-  const mesNum = parseInt(mes, 10);
-  const mesExtenso = MONTH_NAMES[mesNum - 1] || mes;
-  const periodoLabel = `${mesExtenso} de ${ano}`;
   const emissao = today.toLocaleDateString('pt-BR');
 
   let resumoTexto = '';
@@ -117,7 +110,7 @@ function getReportData(mesParam, anoParam, usuario) {
 // GET /api/relatorio
 router.get('/', (req, res) => {
   try {
-    const data = getReportData(req.query.mes, req.query.ano, req.usuario);
+    const data = getReportData(req.query.mes, req.query.ano, req.usuario, req.query.data_inicio, req.query.data_fim);
     res.json(data);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao gerar relatório em JSON.', detalhes: error.message });
@@ -782,4 +775,632 @@ router.get('/excel', async (req, res) => {
   }
 });
 
+// ==========================================================
+// ROTAS DE GERENCIAMENTO DE RELATÓRIOS SALVOS (HISTÓRICO)
+// ==========================================================
+
+// GET /api/relatorio/salvos - Lista relatórios salvos pelo usuário
+router.get('/salvos', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const lista = db.prepare(`
+      SELECT id, usuario_id, tipo, titulo, periodo_inicio, periodo_fim, criado_em, atualizado_em, dados_json
+      FROM relatorios_salvos
+      WHERE usuario_id = ?
+      ORDER BY criado_em DESC
+    `).all(usuarioId);
+
+    const formatados = lista.map((item) => {
+      let dados = {};
+      try {
+        dados = JSON.parse(item.dados_json);
+      } catch (e) {
+        dados = {};
+      }
+      return {
+        id: item.id,
+        tipo: item.tipo,
+        titulo: item.titulo,
+        periodo_inicio: item.periodo_inicio,
+        periodo_fim: item.periodo_fim,
+        criado_em: item.criado_em,
+        atualizado_em: item.atualizado_em,
+        dados
+      };
+    });
+
+    res.json(formatados);
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao listar relatórios salvos.', detalhes: error.message });
+  }
+});
+
+// POST /api/relatorio/salvos - Salva ou atualiza um relatório
+router.post('/salvos', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const { id, tipo = 'produtividade', titulo, periodo_inicio, periodo_fim, dados } = req.body;
+
+    if (!titulo || !dados) {
+      return res.status(400).json({ erro: 'Título e dados do relatório são obrigatórios.' });
+    }
+
+    const dadosStr = typeof dados === 'string' ? dados : JSON.stringify(dados);
+
+    if (id) {
+      const existing = db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
+      if (!existing) {
+        return res.status(404).json({ erro: 'Relatório não encontrado para atualização.' });
+      }
+
+      db.prepare(`
+        UPDATE relatorios_salvos
+        SET tipo = ?, titulo = ?, periodo_inicio = ?, periodo_fim = ?, dados_json = ?, atualizado_em = datetime('now', 'localtime')
+        WHERE id = ? AND usuario_id = ?
+      `).run(tipo, titulo, periodo_inicio || null, periodo_fim || null, dadosStr, id, usuarioId);
+
+      const atualizado = db.prepare('SELECT * FROM relatorios_salvos WHERE id = ?').get(id);
+      return res.json({ mensagem: 'Relatório atualizado com sucesso.', id: atualizado.id });
+    }
+
+    const insertResult = db.prepare(`
+      INSERT INTO relatorios_salvos (usuario_id, tipo, titulo, periodo_inicio, periodo_fim, dados_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(usuarioId, tipo, titulo, periodo_inicio || null, periodo_fim || null, dadosStr);
+
+    res.status(201).json({ mensagem: 'Relatório salvo com sucesso no histórico!', id: insertResult.lastInsertRowid });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao salvar relatório.', detalhes: error.message });
+  }
+});
+
+// GET /api/relatorio/salvos/:id - Detalhes de um relatório salvo
+router.get('/salvos/:id', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const item = db.prepare('SELECT * FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
+
+    if (!item) {
+      return res.status(404).json({ erro: 'Relatório não encontrado.' });
+    }
+
+    let dados = {};
+    try {
+      dados = JSON.parse(item.dados_json);
+    } catch (e) {
+      dados = {};
+    }
+
+    res.json({
+      id: item.id,
+      tipo: item.tipo,
+      titulo: item.titulo,
+      periodo_inicio: item.periodo_inicio,
+      periodo_fim: item.periodo_fim,
+      criado_em: item.criado_em,
+      atualizado_em: item.atualizado_em,
+      dados
+    });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao recuperar relatório salvo.', detalhes: error.message });
+  }
+});
+
+// DELETE /api/relatorio/salvos/:id - Exclui um relatório salvo
+router.delete('/salvos/:id', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const item = db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
+
+    if (!item) {
+      return res.status(404).json({ erro: 'Relatório não encontrado ou não pertence a você.' });
+    }
+
+    db.prepare('DELETE FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').run(req.params.id, usuarioId);
+    res.json({ mensagem: 'Relatório excluído com sucesso do histórico.', id: req.params.id });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao excluir relatório.', detalhes: error.message });
+  }
+});
+
+// ==========================================================
+// EXPORTAÇÃO DOCX OFICIAL — RELATÓRIO DE PRODUTIVIDADE DE T.I.
+// ==========================================================
+
+router.post('/produtividade/docx', async (req, res) => {
+  try {
+    const data = req.body;
+    const usuarioId = req.usuario.id;
+
+    // Busca configuração do usuário para obter o logo oficial
+    let config = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+    const logoFullPath = path.join(__dirname, '../../', config?.logo_path || 'uploads/logo.png');
+
+    let logoData = null;
+    if (fs.existsSync(logoFullPath)) {
+      try {
+        logoData = fs.readFileSync(logoFullPath);
+      } catch (err) {
+        console.warn('Não foi possível ler o logo para o documento de produtividade:', err.message);
+      }
+    }
+
+    const docChildren = [];
+
+    // Cabeçalho institucional (Tabela sem bordas com logo à esquerda e identificação à direita)
+    const headerCells = [];
+    if (logoData) {
+      headerCells.push(
+        new TableCell({
+          width: { size: 35, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.NONE },
+            bottom: { style: BorderStyle.NONE },
+            left: { style: BorderStyle.NONE },
+            right: { style: BorderStyle.NONE }
+          },
+          children: [
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: logoData,
+                  transformation: { width: 130, height: 65 }
+                })
+              ]
+            })
+          ]
+        })
+      );
+    }
+
+    headerCells.push(
+      new TableCell({
+        width: { size: logoData ? 65 : 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.NONE },
+          bottom: { style: BorderStyle.NONE },
+          left: { style: BorderStyle.NONE },
+          right: { style: BorderStyle.NONE }
+        },
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [
+              new TextRun({
+                text: 'ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO BOM CONSELHO',
+                bold: true,
+                font: 'Arial',
+                size: 21,
+                color: '000000'
+              })
+            ]
+          }),
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 40 },
+            children: [
+              new TextRun({
+                text: 'Entidade Mantenedora do Hospital Regional de Arapiraca',
+                font: 'Arial',
+                size: 19,
+                color: '000000'
+              })
+            ]
+          })
+        ]
+      })
+    );
+
+    docChildren.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: headerCells
+          })
+        ]
+      }),
+      new Paragraph({ spacing: { after: 200 } })
+    );
+
+    // Título centralizado em negrito
+    docChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 100, after: 240 },
+        keepWithNext: true,
+        children: [
+          new TextRun({
+            text: 'RELATÓRIO DE PRODUTIVIDADE - TECNOLOGIA DA INFORMAÇÃO',
+            bold: true,
+            font: 'Arial',
+            size: 23,
+            color: '000000'
+          })
+        ]
+      })
+    );
+
+    const makeSectionTitle = (title) =>
+      new Paragraph({
+        spacing: { before: 180, after: 60 },
+        keepWithNext: true,
+        children: [
+          new TextRun({
+            text: title,
+            bold: true,
+            font: 'Arial',
+            size: 22,
+            color: '000000'
+          })
+        ]
+      });
+
+    const makeSubSectionTitle = (title) =>
+      new Paragraph({
+        spacing: { before: 120, after: 40 },
+        keepWithNext: true,
+        children: [
+          new TextRun({
+            text: title,
+            bold: true,
+            font: 'Arial',
+            size: 21,
+            color: '000000'
+          })
+        ]
+      });
+
+    const makeParagraph = (text, isItalic = false) =>
+      new Paragraph({
+        spacing: { after: 80 },
+        children: [
+          new TextRun({
+            text: text || 'Sem ocorrências no período.',
+            font: 'Arial',
+            size: 22,
+            italics: isItalic,
+            color: '000000'
+          })
+        ]
+      });
+
+    const makeBullet = (text) =>
+      new Paragraph({
+        bullet: { level: 0 },
+        spacing: { after: 40 },
+        children: [
+          new TextRun({
+            text: text || 'Sem ocorrências no período.',
+            font: 'Arial',
+            size: 22,
+            color: '000000'
+          })
+        ]
+      });
+
+    // 1. Identificação
+    docChildren.push(makeSectionTitle('1. Identificação'));
+    const idObj = data.identificacao || {};
+    docChildren.push(
+      makeBullet(`Período Avaliado: ${idObj.periodo || '-'}`),
+      makeBullet(`Unidade/Setor: ${idObj.unidade_setor || 'Núcleo de Tecnologia da Informação'}`),
+      makeBullet(`Responsável: ${idObj.responsavel || '-'}`),
+      makeBullet(`Data de Emissão: ${idObj.data_emissao || '-'}`)
+    );
+
+    // 2. Objetivo
+    docChildren.push(makeSectionTitle('2. Objetivo'));
+    docChildren.push(makeParagraph(data.objetivo));
+
+    // 3. Atividades Desenvolvidas
+    docChildren.push(makeSectionTitle('3. Atividades Desenvolvidas'));
+    if (Array.isArray(data.atividades) && data.atividades.length > 0) {
+      data.atividades.forEach((item) => docChildren.push(makeBullet(item)));
+    } else {
+      docChildren.push(makeParagraph('Sem ocorrências no período.'));
+    }
+
+    // 3.1 Manutenção Preventiva
+    docChildren.push(makeSubSectionTitle('3.1 Manutenção Preventiva'));
+    if (Array.isArray(data.manutencao_preventiva) && data.manutencao_preventiva.length > 0) {
+      data.manutencao_preventiva.forEach((item) => docChildren.push(makeBullet(item)));
+    } else if (data.manutencao_preventiva_texto) {
+      docChildren.push(makeParagraph(data.manutencao_preventiva_texto));
+    } else {
+      docChildren.push(makeParagraph('Sem ocorrências no período.'));
+    }
+
+    // 3.2 Suporte ao Usuário
+    docChildren.push(makeSubSectionTitle('3.2 Suporte ao Usuário'));
+    const sup = data.suporte_usuario || {};
+    docChildren.push(
+      makeBullet(`Quantidade de chamados atendidos: ${sup.total ?? 0}`),
+      makeBullet(`Atendimentos remotos: ${sup.remotos ?? 0} e Atendimentos presenciais: ${sup.presenciais ?? 0}${sup.comparacao ? ` — ${sup.comparacao}` : ''}`)
+    );
+    docChildren.push(
+      new Paragraph({
+        spacing: { before: 80, after: 40 },
+        keepWithNext: true,
+        children: [
+          new TextRun({ text: 'Principais demandas solucionadas:', bold: true, font: 'Arial', size: 21 })
+        ]
+      })
+    );
+    if (Array.isArray(sup.demandas) && sup.demandas.length > 0) {
+      sup.demandas.forEach((d) => docChildren.push(makeBullet(typeof d === 'string' ? d : `${d.categoria}: ${d.quantidade} chamados`)));
+    } else {
+      docChildren.push(makeParagraph('Sem ocorrências no período.'));
+    }
+
+    // 3.3 Implantação e Manutenção de Infraestrutura de Rede
+    docChildren.push(makeSubSectionTitle('3.3 Implantação e Manutenção de Infraestrutura de Rede'));
+    const infra = data.infraestrutura || {};
+
+    docChildren.push(
+      new Paragraph({
+        spacing: { before: 60, after: 40 },
+        keepWithNext: true,
+        children: [
+          new TextRun({ text: 'Organização de cabeamento estruturado:', bold: true, font: 'Arial', size: 21 })
+        ]
+      })
+    );
+
+    // Tabela com uma coluna "Setor" e bordas simples pretas
+    const setores = Array.isArray(infra.setores_cabeamento) && infra.setores_cabeamento.length > 0
+      ? infra.setores_cabeamento
+      : ['Sem ocorrências no período.'];
+
+    const tableRows = [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+              bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+              left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+              right: { style: BorderStyle.SINGLE, size: 4, color: '000000' }
+            },
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Setor', bold: true, font: 'Arial', size: 21, color: '000000' })
+                ]
+              })
+            ]
+          })
+        ]
+      })
+    ];
+
+    setores.forEach((setor) => {
+      tableRows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 4, color: '000000' }
+              },
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: setor, font: 'Arial', size: 21, color: '000000' })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      );
+    });
+
+    docChildren.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: tableRows
+      }),
+      new Paragraph({ spacing: { after: 80 } }),
+      makeBullet(`Expansão ou adequação da infraestrutura: ${infra.expansao_adequacao || 'Sem ocorrências no período.'}`),
+      makeBullet(`Equipamentos entregues: ${infra.equipamentos_entregues ?? 0}`),
+      makeBullet(`Equipamentos remanejados: ${infra.equipamentos_remanejados || 'Sem equipamentos remanejados'}`),
+      makeBullet(`Equipamentos recolhidos: ${Array.isArray(infra.equipamentos_recolhidos) ? infra.equipamentos_recolhidos.join(', ') : (infra.equipamentos_recolhidos || 'Sem equipamentos recolhidos')}`),
+      makeBullet(`Atualização de inventário patrimonial: ${infra.inventario || 'Em progresso'}`)
+    );
+
+    // 3.5 Demandas Adicionais
+    docChildren.push(
+      makeSubSectionTitle('3.5 Demandas Adicionais'),
+      new Paragraph({
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: '(Descrever atividades extraordinárias ou não previstas inicialmente.)', italics: true, font: 'Arial', size: 20, color: '000000' })
+        ]
+      })
+    );
+    if (Array.isArray(data.demandas_adicionais) && data.demandas_adicionais.length > 0) {
+      data.demandas_adicionais.forEach((item) => {
+        docChildren.push(
+          new Paragraph({
+            border: {
+              bottom: { style: BorderStyle.SINGLE, size: 4, color: '888888', space: 6 }
+            },
+            spacing: { before: 80, after: 80 },
+            children: [
+              new TextRun({ text: `•  ${item}`, font: 'Arial', size: 21, bold: true, color: '000000' })
+            ]
+          })
+        );
+      });
+    } else {
+      docChildren.push(makeParagraph('Sem ocorrências extraordinárias no período.'));
+    }
+
+    // 4. Indicadores de Produtividade
+    docChildren.push(makeSectionTitle('4. Indicadores de Produtividade'));
+    const ind = data.indicadores || {};
+    
+    const makeIndicadorWithArrow = (titulo, valor) => [
+      new Paragraph({
+        spacing: { before: 80, after: 20 },
+        children: [
+          new TextRun({ text: `•  ${titulo}`, font: 'Arial', size: 21, bold: true, color: '000000' })
+        ]
+      }),
+      new Paragraph({
+        indent: { left: 420 },
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: `➔  ${valor}`, font: 'Arial', size: 21, bold: true, color: '000000' })
+        ]
+      })
+    ];
+
+    docChildren.push(
+      ...makeIndicadorWithArrow('Total de manutenções preventivas realizadas:', ind.manutencoes_preventivas || 'Mais de 130 estações de trabalho'),
+      ...makeIndicadorWithArrow('Total de atendimentos aos usuários:', ind.atendimentos_usuarios || 'Entre 50 a 70 atendimentos no mês'),
+      ...makeIndicadorWithArrow('Total de intervenções em infraestrutura de rede:', ind.intervencoes_rede || 'No mês de maio por volta de 6 a 9 modificações / 5 a 9 correções'),
+      ...makeIndicadorWithArrow('Total de equipamentos alocados/remanejados:', ind.equipamentos_alocados || 'Total de 6 equipamentos alocados'),
+      ...makeIndicadorWithArrow('Total de outras demandas executadas:', ind.outras_demandas || 'Por volta de 8 ou menos fora do seguimento de T.I, como: Consultorias de preço e consertos, Instalações e conserto fora do segmento de T.I.)')
+    );
+
+    // 5. Resultados Obtidos
+    docChildren.push(makeSectionTitle('5. Resultados Obtidos'));
+    docChildren.push(makeParagraph(data.resultados_obtidos));
+
+    // 6. Dificuldades Encontradas
+    docChildren.push(makeSectionTitle('6. Dificuldades Encontradas'));
+    docChildren.push(makeParagraph(data.dificuldades));
+
+    // 7. Atendimentos no período de sobreaviso nos finais de semana
+    docChildren.push(makeSectionTitle('7. Atendimentos no período de sobreaviso nos finais de semana'));
+    docChildren.push(
+      new Paragraph({
+        spacing: { after: 40 },
+        keepWithNext: true,
+        children: [
+          new TextRun({ text: 'Principais ocorrências:', bold: true, font: 'Arial', size: 21 })
+        ]
+      })
+    );
+    if (Array.isArray(data.sobreaviso) && data.sobreaviso.length > 0) {
+      data.sobreaviso.forEach((item) => docChildren.push(makeBullet(item)));
+    } else {
+      docChildren.push(makeParagraph('Sem ocorrências no período.'));
+    }
+
+    // Assinatura (fim do documento)
+    docChildren.push(
+      new Paragraph({
+        spacing: { before: 360, after: 60 },
+        keepWithNext: true,
+        children: [
+          new TextRun({ text: 'Responsável pelo Relatório:', bold: true, font: 'Arial', size: 22 })
+        ]
+      }),
+      new Paragraph({
+        spacing: { after: 40 },
+        children: [
+          new TextRun({ text: `Nome: ${idObj.responsavel || '-'}`, font: 'Arial', size: 22 })
+        ]
+      }),
+      new Paragraph({
+        spacing: { after: 120 },
+        children: [
+          new TextRun({ text: `Cargo: ${idObj.cargo || 'Técnico de Tecnologia da Informação'}`, font: 'Arial', size: 22 })
+        ]
+      }),
+      new Paragraph({
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: 'Assinatura: ____________________________________________________', font: 'Arial', size: 22 })
+        ]
+      }),
+      new Paragraph({
+        spacing: { after: 100 },
+        children: [
+          new TextRun({ text: `Data: ${idObj.data_emissao || '-'}`, font: 'Arial', size: 22 })
+        ]
+      })
+    );
+
+    // Constrói o documento com margens de 2cm e rodapé oficial em todas as páginas
+    const doc = new Document({
+      sections: [
+        {
+          properties: {
+            page: {
+              margin: {
+                top: 1134, // ~20mm (2cm)
+                right: 1134,
+                bottom: 1134,
+                left: 1134
+              }
+            }
+          },
+          footers: {
+            default: new Footer({
+              children: [
+                new Paragraph({
+                  border: {
+                    top: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 4 }
+                  },
+                  spacing: { before: 80, after: 30 },
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      text: 'Rua São Francisco, 154, Centro, Arapiraca – Alagoas',
+                      font: 'Arial',
+                      size: 18,
+                      color: '000000'
+                    })
+                  ]
+                }),
+                new Paragraph({
+                  spacing: { after: 30 },
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      text: 'CEP: 57300 – 080, Fone: (82) 4004 1010   |   CNPJ: 24.177.305/0001-31',
+                      font: 'Arial',
+                      size: 18,
+                      color: '000000'
+                    })
+                  ]
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({ text: 'Página ', font: 'Arial', size: 18, color: '000000' }),
+                    new TextRun({ children: [PageNumber.CURRENT], font: 'Arial', size: 18, color: '000000' }),
+                    new TextRun({ text: ' de ', font: 'Arial', size: 18, color: '000000' }),
+                    new TextRun({ children: [PageNumber.TOTAL_PAGES], font: 'Arial', size: 18, color: '000000' })
+                  ]
+                })
+              ]
+            })
+          },
+          children: docChildren
+        }
+      ]
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    const filename = `relatorio-produtividade-ti-${new Date().toISOString().slice(0, 10)}.docx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Erro ao gerar DOCX de produtividade:', error);
+    res.status(500).json({ erro: 'Erro ao gerar documento Word oficial.', detalhes: error.message });
+  }
+});
+
 module.exports = router;
+
