@@ -6,7 +6,7 @@ const authMiddleware = require('../middleware/auth');
 router.use(authMiddleware);
 
 // GET /api/dashboard - Indicadores e métricas exclusivas do usuário logado
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const today = new Date();
     const ano = req.query.ano ? String(req.query.ano) : String(today.getFullYear());
@@ -17,44 +17,44 @@ router.get('/', (req, res) => {
     const usuarioId = req.usuario.id;
 
     // Total de ocorrências no período
-    const totalRow = db.prepare(`
+    const totalRow = await db.prepare(`
       SELECT COUNT(*) as count FROM ocorrencias
       WHERE usuario_id = ?
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
     `).get(usuarioId, ano, mes);
-    const total = totalRow.count;
+    const total = totalRow ? Number(totalRow.count) : 0;
 
     // Resolvidas
-    const resolvidasRow = db.prepare(`
+    const resolvidasRow = await db.prepare(`
       SELECT COUNT(*) as count FROM ocorrencias
       WHERE usuario_id = ? AND status = 'Resolvido'
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
     `).get(usuarioId, ano, mes);
-    const resolvidas = resolvidasRow.count;
+    const resolvidas = resolvidasRow ? Number(resolvidasRow.count) : 0;
 
     // Em andamento
-    const emAndamentoRow = db.prepare(`
+    const emAndamentoRow = await db.prepare(`
       SELECT COUNT(*) as count FROM ocorrencias
       WHERE usuario_id = ? AND status = 'Em andamento'
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
     `).get(usuarioId, ano, mes);
-    const emAndamento = emAndamentoRow.count;
+    const emAndamento = emAndamentoRow ? Number(emAndamentoRow.count) : 0;
 
     // Abertas
-    const abertasRow = db.prepare(`
+    const abertasRow = await db.prepare(`
       SELECT COUNT(*) as count FROM ocorrencias
       WHERE usuario_id = ? AND status = 'Aberto'
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
     `).get(usuarioId, ano, mes);
-    const abertas = abertasRow.count;
+    const abertas = abertasRow ? Number(abertasRow.count) : 0;
 
     // Alta prioridade / Urgente
-    const altaPrioridadeRow = db.prepare(`
+    const altaPrioridadeRow = await db.prepare(`
       SELECT COUNT(*) as count FROM ocorrencias
       WHERE usuario_id = ? AND prioridade IN ('Alta', 'Urgente')
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
     `).get(usuarioId, ano, mes);
-    const altaPrioridade = altaPrioridadeRow.count;
+    const altaPrioridade = altaPrioridadeRow ? Number(altaPrioridadeRow.count) : 0;
 
     // Percentuais de status
     const resolvidasPct = total > 0 ? Math.round((resolvidas / total) * 100) : 0;
@@ -62,7 +62,7 @@ router.get('/', (req, res) => {
     const abertasPct = total > 0 ? Math.round((abertas / total) * 100) : 0;
 
     // Últimas ocorrências registradas pelo usuário no período
-    const atividadesRecentes = db.prepare(`
+    const atividadesRecentes = await db.prepare(`
       SELECT id, data, setor, tipo_problema, problema, status, prioridade
       FROM ocorrencias
       WHERE usuario_id = ?
@@ -72,7 +72,7 @@ router.get('/', (req, res) => {
     `).all(usuarioId, ano, mes);
 
     // Distribuição por Setor no período
-    const porSetor = db.prepare(`
+    const porSetor = await db.prepare(`
       SELECT setor, COUNT(*) as total,
              SUM(CASE WHEN status = 'Resolvido' THEN 1 ELSE 0 END) as resolvidas
       FROM ocorrencias
@@ -84,7 +84,7 @@ router.get('/', (req, res) => {
     `).all(usuarioId, ano, mes);
 
     // Distribuição por Tipo de Problema no período
-    const porTipo = db.prepare(`
+    const porTipo = await db.prepare(`
       SELECT tipo_problema, COUNT(*) as total,
              SUM(CASE WHEN status = 'Resolvido' THEN 1 ELSE 0 END) as resolvidas
       FROM ocorrencias
@@ -96,7 +96,7 @@ router.get('/', (req, res) => {
     `).all(usuarioId, ano, mes);
 
     // Distribuição por Prioridade no período
-    const porPrioridade = db.prepare(`
+    const porPrioridade = await db.prepare(`
       SELECT prioridade, COUNT(*) as total
       FROM ocorrencias
       WHERE usuario_id = ?

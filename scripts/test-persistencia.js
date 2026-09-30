@@ -65,8 +65,8 @@ async function run() {
   // 3. Listar e conferir
   const listRes = await request('/api/ocorrencias', { headers });
   const list = listRes.json();
-  if (list.length !== 5) throw new Error(`Esperado 5 ocorrências (2 de boas-vindas + 3 novas), obtido ${list.length}`);
-  console.log('3. Listagem confirmada com 5 ocorrências registradas no banco.');
+  if (list.length !== 3) throw new Error(`Esperado 3 ocorrências cadastradas, obtido ${list.length}`);
+  console.log('3. Listagem confirmada com 3 ocorrências registradas no banco.');
 
   // 4. Testar sincronização em lote (simulando restauração do cache do navegador)
   const syncRes = await request('/api/ocorrencias/sincronizar', {
@@ -82,7 +82,7 @@ async function run() {
 
   const syncData = syncRes.json();
   console.log('4. Sincronização em lote executada:', syncData.mensagem);
-  if (syncData.total !== 6) throw new Error(`Esperado 6 ocorrências no total após sync, obtido ${syncData.total}`);
+  if (syncData.total !== 4) throw new Error(`Esperado 4 ocorrências no total após sync, obtido ${syncData.total}`);
 
   console.log('✓ TESTE DE PERSISTÊNCIA E SINCRONIZAÇÃO PASSOU COM SUCESSO TOTAL!');
 }

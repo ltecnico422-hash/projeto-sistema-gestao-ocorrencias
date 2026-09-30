@@ -38,22 +38,22 @@ const upload = multer({
   }
 });
 
-function getUserConfig(usuarioId, nomePadrao) {
-  let cfg = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+async function getUserConfig(usuarioId, nomePadrao) {
+  let cfg = await db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
   if (!cfg) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO configuracoes_usuario (usuario_id, nome_hospital, setor, nome_responsavel, logo_path)
       VALUES (?, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', ?, 'uploads/logo.png')
     `).run(usuarioId, nomePadrao || '');
-    cfg = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+    cfg = await db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
   }
   return cfg;
 }
 
 // GET /api/configuracoes - Configurações privativas do usuário autenticado
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const config = getUserConfig(req.usuario.id, req.usuario.nome);
+    const config = await getUserConfig(req.usuario.id, req.usuario.nome);
     res.json(config);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao consultar configurações.', detalhes: error.message });
@@ -61,14 +61,14 @@ router.get('/', (req, res) => {
 });
 
 // PUT /api/configuracoes - Atualiza as configurações privativas do usuário
-router.put('/', (req, res) => {
+router.put('/', async (req, res) => {
   try {
     const { nome_hospital, setor, nome_responsavel } = req.body;
     const usuarioId = req.usuario.id;
 
-    getUserConfig(usuarioId, req.usuario.nome);
+    await getUserConfig(usuarioId, req.usuario.nome);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE configuracoes_usuario
       SET nome_hospital = COALESCE(?, nome_hospital),
           setor = COALESCE(?, setor),
@@ -82,7 +82,7 @@ router.put('/', (req, res) => {
       usuarioId
     );
 
-    const updated = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+    const updated = await db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
     res.json({ mensagem: 'Configurações atualizadas com sucesso.', dados: updated });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao atualizar configurações.', detalhes: error.message });
@@ -90,7 +90,7 @@ router.put('/', (req, res) => {
 });
 
 // POST /api/configuracoes/logo - Upload de logotipo exclusivo para o usuário
-router.post('/logo', upload.single('logo'), (req, res) => {
+router.post('/logo', upload.single('logo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo de imagem foi enviado.' });
@@ -99,9 +99,9 @@ router.post('/logo', upload.single('logo'), (req, res) => {
     const usuarioId = req.usuario.id;
     const relativePath = `uploads/${req.file.filename}`;
 
-    getUserConfig(usuarioId, req.usuario.nome);
+    await getUserConfig(usuarioId, req.usuario.nome);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE configuracoes_usuario
       SET logo_path = ?, atualizado_em = datetime('now', 'localtime')
       WHERE usuario_id = ?
@@ -121,7 +121,7 @@ router.get('/backup', (req, res) => {
   try {
     const dbPath = path.join(__dirname, '../../data/database.sqlite');
     if (!fs.existsSync(dbPath)) {
-      return res.status(404).json({ erro: 'Arquivo de banco de dados não encontrado.' });
+      return res.status(404).json({ erro: 'Arquivo de banco de dados SQLite local não encontrado (utilizando Supabase na nuvem).' });
     }
 
     // Força checkpoint para garantir que tudo do WAL esteja no arquivo principal
@@ -145,15 +145,15 @@ router.get('/backup', (req, res) => {
 });
 
 // GET /api/configuracoes/backup-json - Exporta backup completo do usuário em JSON
-router.get('/backup-json', (req, res) => {
+router.get('/backup-json', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
-    const config = getUserConfig(usuarioId, req.usuario.nome);
-    const ocorrencias = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data ASC, id ASC').all(usuarioId);
+    const config = await getUserConfig(usuarioId, req.usuario.nome);
+    const ocorrencias = await db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data ASC, id ASC').all(usuarioId);
     
     let relatoriosSalvos = [];
     try {
-      relatoriosSalvos = db.prepare('SELECT * FROM relatorios_salvos WHERE usuario_id = ? ORDER BY criado_em DESC').all(usuarioId);
+      relatoriosSalvos = await db.prepare('SELECT * FROM relatorios_salvos WHERE usuario_id = ? ORDER BY criado_em DESC').all(usuarioId);
     } catch (e) {
       // tabela pode não existir ainda se migration não rodou
     }
@@ -183,7 +183,7 @@ router.get('/backup-json', (req, res) => {
 });
 
 // POST /api/configuracoes/restaurar-json - Restaura ocorrências e relatórios salvos a partir de arquivo JSON
-router.post('/restaurar-json', (req, res) => {
+router.post('/restaurar-json', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
     const { ocorrencias, relatorios_salvos, configuracoes } = req.body;
@@ -197,7 +197,7 @@ router.post('/restaurar-json', (req, res) => {
 
     // Atualiza configurações se presentes
     if (configuracoes && (configuracoes.nome_hospital || configuracoes.setor || configuracoes.nome_responsavel)) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE configuracoes_usuario
         SET nome_hospital = COALESCE(?, nome_hospital),
             setor = COALESCE(?, setor),
@@ -222,7 +222,7 @@ router.post('/restaurar-json', (req, res) => {
 
       for (const oc of ocorrencias) {
         if (oc.setor && oc.tipo_problema && oc.problema) {
-          insertOc.run(
+          await insertOc.run(
             usuarioId,
             oc.data ? String(oc.data).slice(0, 10) : new Date().toISOString().slice(0, 10),
             oc.setor.trim(),
@@ -249,7 +249,7 @@ router.post('/restaurar-json', (req, res) => {
       for (const r of relatorios_salvos) {
         if (r.titulo && r.dados_json) {
           const dadosStr = typeof r.dados_json === 'string' ? r.dados_json : JSON.stringify(r.dados_json);
-          insertRel.run(
+          await insertRel.run(
             usuarioId,
             r.tipo || 'produtividade',
             r.titulo,

@@ -7,7 +7,7 @@ const authMiddleware = require('../middleware/auth');
 router.use(authMiddleware);
 
 // GET /api/ocorrencias - Listagem das ocorrências do usuário com filtros
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { mes, ano, status, prioridade, busca, data_inicio, data_fim } = req.query;
     const usuarioId = req.usuario.id;
@@ -55,7 +55,7 @@ router.get('/', (req, res) => {
 
     query += ` ORDER BY data DESC, id DESC`;
 
-    const ocorrencias = db.prepare(query).all(...params);
+    const ocorrencias = await db.prepare(query).all(...params);
     res.json(ocorrencias);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao listar ocorrências.', detalhes: error.message });
@@ -63,12 +63,12 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/ocorrencias/:id - Detalhes de uma ocorrência do usuário
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const usuarioId = req.usuario.id;
 
-    const ocorrencia = db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
+    const ocorrencia = await db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
 
     if (!ocorrencia) {
       return res.status(404).json({ erro: 'Ocorrência não encontrada ou você não tem permissão para acessá-la.' });
@@ -81,7 +81,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/ocorrencias - Cadastro de nova ocorrência vinculada ao usuário logado
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       data,
@@ -108,7 +108,7 @@ router.post('/', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const result = insertStmt.run(
+    const result = await insertStmt.run(
       usuarioId,
       finalData,
       setor.trim(),
@@ -120,7 +120,7 @@ router.post('/', (req, res) => {
       prioridade
     );
 
-    const novaOcorrencia = db.prepare('SELECT * FROM ocorrencias WHERE id = ?').get(result.lastInsertRowid);
+    const novaOcorrencia = await db.prepare('SELECT * FROM ocorrencias WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(novaOcorrencia);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao cadastrar ocorrência.', detalhes: error.message });
@@ -128,7 +128,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/ocorrencias/:id - Atualização de ocorrência com verificação de posse
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const usuarioId = req.usuario.id;
@@ -143,12 +143,12 @@ router.put('/:id', (req, res) => {
       prioridade
     } = req.body;
 
-    const existing = db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
+    const existing = await db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
     if (!existing) {
       return res.status(404).json({ erro: 'Ocorrência não encontrada ou você não tem permissão para alterá-la.' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE ocorrencias
       SET data = COALESCE(?, data),
           setor = COALESCE(?, setor),
@@ -173,7 +173,7 @@ router.put('/:id', (req, res) => {
       usuarioId
     );
 
-    const atualizado = db.prepare('SELECT * FROM ocorrencias WHERE id = ?').get(id);
+    const atualizado = await db.prepare('SELECT * FROM ocorrencias WHERE id = ?').get(id);
     res.json(atualizado);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao atualizar ocorrência.', detalhes: error.message });
@@ -181,18 +181,18 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/ocorrencias/:id - Exclusão de ocorrência com verificação de posse
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const usuarioId = req.usuario.id;
 
-    const existing = db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
+    const existing = await db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
     if (!existing) {
       return res.status(404).json({ erro: 'Ocorrência não encontrada ou você não tem permissão para excluí-la.' });
     }
 
-    db.prepare('DELETE FROM ocorrencias WHERE id = ? AND usuario_id = ?').run(id, usuarioId);
-    try { db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
+    await db.prepare('DELETE FROM ocorrencias WHERE id = ? AND usuario_id = ?').run(id, usuarioId);
+    try { await db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
     res.json({ mensagem: 'Ocorrência excluída com sucesso.', id });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao excluir ocorrência.', detalhes: error.message });
@@ -200,13 +200,13 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST /api/ocorrencias/sincronizar - Sincronização e restauração inteligente em lote
-router.post('/sincronizar', (req, res) => {
+router.post('/sincronizar', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
     const { ocorrencias } = req.body;
 
     if (!Array.isArray(ocorrencias) || ocorrencias.length === 0) {
-      const allCurrent = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
+      const allCurrent = await db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
       return res.json({ restauradas: 0, total: allCurrent.length, ocorrencias: allCurrent });
     }
 
@@ -228,9 +228,9 @@ router.post('/sincronizar', (req, res) => {
       const setorVal = String(item.setor).trim();
       const problemaVal = String(item.problema).trim();
 
-      const exists = checkStmt.get(usuarioId, dataVal, setorVal, problemaVal);
+      const exists = await checkStmt.get(usuarioId, dataVal, setorVal, problemaVal);
       if (!exists) {
-        insertStmt.run(
+        await insertStmt.run(
           usuarioId,
           dataVal,
           setorVal,
@@ -245,9 +245,9 @@ router.post('/sincronizar', (req, res) => {
       }
     }
 
-    try { db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
+    try { await db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
 
-    const allUpdated = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
+    const allUpdated = await db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
     res.json({
       mensagem: `${restauradas} ocorrência(s) restaurada(s) e sincronizada(s) com sucesso!`,
       restauradas,

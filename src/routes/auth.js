@@ -5,7 +5,7 @@ const { hashPassword, verifyPassword, isLegacyPassword, generateToken } = requir
 const authMiddleware = require('../middleware/auth');
 
 // POST /api/auth/cadastro - Criação de nova conta de usuário
-router.post('/cadastro', (req, res) => {
+router.post('/cadastro', async (req, res) => {
   try {
     const { nome, email, senha } = req.body;
 
@@ -23,7 +23,7 @@ router.post('/cadastro', (req, res) => {
     const nomeNorm = nome.trim();
 
     // Verifica duplicidade de e-mail
-    const exists = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(emailNorm);
+    const exists = await db.prepare('SELECT id FROM usuarios WHERE email = ?').get(emailNorm);
     if (exists) {
       return res.status(400).json({ erro: 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.' });
     }
@@ -34,11 +34,11 @@ router.post('/cadastro', (req, res) => {
       INSERT INTO usuarios (nome, email, senha_hash)
       VALUES (?, ?, ?)
     `);
-    const result = insertUser.run(nomeNorm, emailNorm, senhaHash);
+    const result = await insertUser.run(nomeNorm, emailNorm, senhaHash);
     const userId = Number(result.lastInsertRowid);
 
     // Cria as configurações exclusivas deste usuário
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO configuracoes_usuario (usuario_id, nome_hospital, setor, nome_responsavel, logo_path)
       VALUES (?, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', ?, 'uploads/logo.png')
     `).run(userId, nomeNorm);
@@ -60,7 +60,7 @@ router.post('/cadastro', (req, res) => {
 });
 
 // POST /api/auth/login - Autenticação com e-mail e senha
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
 
@@ -69,7 +69,7 @@ router.post('/login', (req, res) => {
     }
 
     const emailNorm = email.trim().toLowerCase();
-    const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(emailNorm);
+    const user = await db.prepare('SELECT * FROM usuarios WHERE email = ?').get(emailNorm);
 
     if (!user) {
       return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
@@ -84,7 +84,7 @@ router.post('/login', (req, res) => {
     if (isLegacyPassword(user.senha_hash)) {
       try {
         const secureHash = hashPassword(senha);
-        db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(secureHash, user.id);
+        await db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(secureHash, user.id);
       } catch (errMigrate) {
         console.error('[Auth] Aviso ao atualizar hash de senha legada:', errMigrate.message);
       }
@@ -107,7 +107,7 @@ router.post('/login', (req, res) => {
 });
 
 // POST /api/auth/recuperar-senha - Redefinição de senha sem perda de dados
-router.post('/recuperar-senha', (req, res) => {
+router.post('/recuperar-senha', async (req, res) => {
   try {
     const { email, novaSenha } = req.body;
 
@@ -119,7 +119,7 @@ router.post('/recuperar-senha', (req, res) => {
     }
 
     const emailNorm = email.trim().toLowerCase();
-    const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(emailNorm);
+    const user = await db.prepare('SELECT * FROM usuarios WHERE email = ?').get(emailNorm);
 
     if (!user) {
       return res.status(404).json({
@@ -128,7 +128,7 @@ router.post('/recuperar-senha', (req, res) => {
     }
 
     const senhaArmazenada = hashPassword(novaSenha);
-    db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(senhaArmazenada, user.id);
+    await db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(senhaArmazenada, user.id);
 
     const token = generateToken({ id: user.id, email: user.email });
 
@@ -147,7 +147,7 @@ router.post('/recuperar-senha', (req, res) => {
 });
 
 // POST /api/auth/alterar-senha - Alteração de senha pelo usuário autenticado
-router.post('/alterar-senha', authMiddleware, (req, res) => {
+router.post('/alterar-senha', authMiddleware, async (req, res) => {
   try {
     const { senhaAtual, novaSenha } = req.body;
 
@@ -158,7 +158,7 @@ router.post('/alterar-senha', authMiddleware, (req, res) => {
       return res.status(400).json({ erro: 'A nova senha deve ter pelo menos 4 caracteres.' });
     }
 
-    const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.usuario.id);
+    const user = await db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.usuario.id);
     if (!user) {
       return res.status(404).json({ erro: 'Usuário não encontrado.' });
     }
@@ -169,7 +169,7 @@ router.post('/alterar-senha', authMiddleware, (req, res) => {
     }
 
     const novaSenhaArmazenada = hashPassword(novaSenha);
-    db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(novaSenhaArmazenada, user.id);
+    await db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(novaSenhaArmazenada, user.id);
 
     res.json({ mensagem: 'Sua senha foi alterada com sucesso!' });
   } catch (error) {

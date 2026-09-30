@@ -29,12 +29,12 @@ const MONTH_NAMES = [
   'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
 ];
 
-function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataFimParam) {
+async function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataFimParam) {
   const today = new Date();
   const usuarioId = usuario.id;
 
   // Busca configurações personalizadas do usuário ou cria padrão
-  let config = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+  let config = await db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
   if (!config) {
     config = {
       nome_hospital: 'Hospital Regional Nossa Senhora do Bom Conselho',
@@ -67,14 +67,23 @@ function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataFimPara
   }
 
   // Indicadores exclusivos do usuário
-  const total = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere}`).get(...queryParams).count;
-  const resolvidas = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Resolvido'`).get(...queryParams).count;
-  const emAndamento = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Em andamento'`).get(...queryParams).count;
-  const abertas = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Aberto'`).get(...queryParams).count;
-  const altaPrioridade = db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND prioridade IN ('Alta', 'Urgente')`).get(...queryParams).count;
+  const totalRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere}`).get(...queryParams);
+  const total = totalRow ? Number(totalRow.count) : 0;
+
+  const resolvidasRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Resolvido'`).get(...queryParams);
+  const resolvidas = resolvidasRow ? Number(resolvidasRow.count) : 0;
+
+  const emAndamentoRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Em andamento'`).get(...queryParams);
+  const emAndamento = emAndamentoRow ? Number(emAndamentoRow.count) : 0;
+
+  const abertasRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND status = 'Aberto'`).get(...queryParams);
+  const abertas = abertasRow ? Number(abertasRow.count) : 0;
+
+  const altaPrioridadeRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND prioridade IN ('Alta', 'Urgente')`).get(...queryParams);
+  const altaPrioridade = altaPrioridadeRow ? Number(altaPrioridadeRow.count) : 0;
 
   // Lista de ocorrências do usuário ordenada decrescente por data e ID
-  const ocorrencias = db.prepare(`
+  const ocorrencias = await db.prepare(`
     SELECT * FROM ocorrencias
     WHERE ${queryWhere}
     ORDER BY data DESC, id DESC
@@ -108,9 +117,9 @@ function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataFimPara
 }
 
 // GET /api/relatorio
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const data = getReportData(req.query.mes, req.query.ano, req.usuario, req.query.data_inicio, req.query.data_fim);
+    const data = await getReportData(req.query.mes, req.query.ano, req.usuario, req.query.data_inicio, req.query.data_fim);
     res.json(data);
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao gerar relatório em JSON.', detalhes: error.message });
@@ -120,10 +129,10 @@ router.get('/', (req, res) => {
 // GET /api/relatorio/docx
 router.get('/docx', async (req, res) => {
   try {
-    const report = getReportData(req.query.mes, req.query.ano, req.usuario);
+    const report = await getReportData(req.query.mes, req.query.ano, req.usuario);
 
     // Registra na auditoria
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO relatorios_gerados (
         usuario_id, periodo_mes, periodo_ano, total_ocorrencias, resolvidas,
         em_andamento, abertas, alta_prioridade, responsavel, formato
@@ -500,12 +509,12 @@ router.get('/docx', async (req, res) => {
 });
 
 // GET /api/relatorio/pdf
-router.get('/pdf', (req, res) => {
+router.get('/pdf', async (req, res) => {
   try {
-    const report = getReportData(req.query.mes, req.query.ano, req.usuario);
+    const report = await getReportData(req.query.mes, req.query.ano, req.usuario);
 
     // Registra auditoria
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO relatorios_gerados (
         usuario_id, periodo_mes, periodo_ano, total_ocorrencias, resolvidas,
         em_andamento, abertas, alta_prioridade, responsavel, formato
@@ -678,7 +687,7 @@ router.get('/pdf', (req, res) => {
 router.get('/excel', async (req, res) => {
   try {
     const ExcelJS = require('exceljs');
-    const report = getReportData(req.query.mes, req.query.ano, req.usuario);
+    const report = await getReportData(req.query.mes, req.query.ano, req.usuario);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = report.config.nome_responsavel || req.usuario.nome;
@@ -780,10 +789,10 @@ router.get('/excel', async (req, res) => {
 // ==========================================================
 
 // GET /api/relatorio/salvos - Lista relatórios salvos pelo usuário
-router.get('/salvos', (req, res) => {
+router.get('/salvos', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
-    const lista = db.prepare(`
+    const lista = await db.prepare(`
       SELECT id, usuario_id, tipo, titulo, periodo_inicio, periodo_fim, criado_em, atualizado_em, dados_json
       FROM relatorios_salvos
       WHERE usuario_id = ?
@@ -816,7 +825,7 @@ router.get('/salvos', (req, res) => {
 });
 
 // POST /api/relatorio/salvos - Salva ou atualiza um relatório
-router.post('/salvos', (req, res) => {
+router.post('/salvos', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
     const { id, tipo = 'produtividade', titulo, periodo_inicio, periodo_fim, dados } = req.body;
@@ -828,22 +837,22 @@ router.post('/salvos', (req, res) => {
     const dadosStr = typeof dados === 'string' ? dados : JSON.stringify(dados);
 
     if (id) {
-      const existing = db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
+      const existing = await db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
       if (!existing) {
         return res.status(404).json({ erro: 'Relatório não encontrado para atualização.' });
       }
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE relatorios_salvos
         SET tipo = ?, titulo = ?, periodo_inicio = ?, periodo_fim = ?, dados_json = ?, atualizado_em = datetime('now', 'localtime')
         WHERE id = ? AND usuario_id = ?
       `).run(tipo, titulo, periodo_inicio || null, periodo_fim || null, dadosStr, id, usuarioId);
 
-      const atualizado = db.prepare('SELECT * FROM relatorios_salvos WHERE id = ?').get(id);
+      const atualizado = await db.prepare('SELECT * FROM relatorios_salvos WHERE id = ?').get(id);
       return res.json({ mensagem: 'Relatório atualizado com sucesso.', id: atualizado.id });
     }
 
-    const insertResult = db.prepare(`
+    const insertResult = await db.prepare(`
       INSERT INTO relatorios_salvos (usuario_id, tipo, titulo, periodo_inicio, periodo_fim, dados_json)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(usuarioId, tipo, titulo, periodo_inicio || null, periodo_fim || null, dadosStr);
@@ -855,10 +864,10 @@ router.post('/salvos', (req, res) => {
 });
 
 // GET /api/relatorio/salvos/:id - Detalhes de um relatório salvo
-router.get('/salvos/:id', (req, res) => {
+router.get('/salvos/:id', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
-    const item = db.prepare('SELECT * FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
+    const item = await db.prepare('SELECT * FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
 
     if (!item) {
       return res.status(404).json({ erro: 'Relatório não encontrado.' });
@@ -887,16 +896,16 @@ router.get('/salvos/:id', (req, res) => {
 });
 
 // DELETE /api/relatorio/salvos/:id - Exclui um relatório salvo
-router.delete('/salvos/:id', (req, res) => {
+router.delete('/salvos/:id', async (req, res) => {
   try {
     const usuarioId = req.usuario.id;
-    const item = db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
+    const item = await db.prepare('SELECT id FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').get(req.params.id, usuarioId);
 
     if (!item) {
       return res.status(404).json({ erro: 'Relatório não encontrado ou não pertence a você.' });
     }
 
-    db.prepare('DELETE FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').run(req.params.id, usuarioId);
+    await db.prepare('DELETE FROM relatorios_salvos WHERE id = ? AND usuario_id = ?').run(req.params.id, usuarioId);
     res.json({ mensagem: 'Relatório excluído com sucesso do histórico.', id: req.params.id });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao excluir relatório.', detalhes: error.message });
@@ -913,7 +922,7 @@ router.post('/produtividade/docx', async (req, res) => {
     const usuarioId = req.usuario.id;
 
     // Busca configuração do usuário para obter o logo oficial
-    let config = db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
+    let config = await db.prepare('SELECT * FROM configuracoes_usuario WHERE usuario_id = ?').get(usuarioId);
     const logoFullPath = path.join(__dirname, '../../', config?.logo_path || 'uploads/logo.png');
 
     let logoData = null;

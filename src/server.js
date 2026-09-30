@@ -3,10 +3,8 @@ const cors = require('cors');
 const path = require('node:path');
 const fs = require('node:fs');
 
-// Inicializa banco de dados e seed
+// Inicializa banco de dados
 require('./database/db');
-const runSeed = require('./database/seed');
-runSeed();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
