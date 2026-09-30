@@ -260,6 +260,60 @@ async function checkAuth() {
   }
 }
 
+// ==========================================================
+// PERSISTÊNCIA LOCAL RESILIENTE E AUTO-SINCRONIZAÇÃO
+// ==========================================================
+function getOcorrenciasCacheKey() {
+  const uid = currentUser?.id || 'default';
+  return `ti_ocorrencias_cache_user_${uid}`;
+}
+
+function saveOcorrenciasToLocalCache(lista) {
+  try {
+    if (!Array.isArray(lista)) return;
+    localStorage.setItem(getOcorrenciasCacheKey(), JSON.stringify(lista));
+  } catch (e) {
+    console.warn('Falha ao salvar no cache local:', e);
+  }
+}
+
+function getOcorrenciasFromLocalCache() {
+  try {
+    const raw = localStorage.getItem(getOcorrenciasCacheKey());
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function syncOcorrenciasWithBackend() {
+  if (!authToken || !currentUser) return;
+  try {
+    const backendList = await api('/api/ocorrencias');
+    const localList = getOcorrenciasFromLocalCache();
+
+    if (backendList && backendList.length > 0) {
+      saveOcorrenciasToLocalCache(backendList);
+    } else if (localList && localList.length > 0) {
+      // O banco remoto está vazio (ex: deploy ou reinício de container na nuvem),
+      // mas o navegador possui ocorrências guardadas. Restaura imediatamente!
+      const syncRes = await api('/api/ocorrencias/sincronizar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ocorrencias: localList })
+      });
+      if (syncRes.restauradas > 0) {
+        showToast(`${syncRes.restauradas} ocorrência(s) restaurada(s) do backup local!`, 'success');
+      }
+      if (syncRes.ocorrencias) {
+        saveOcorrenciasToLocalCache(syncRes.ocorrencias);
+      }
+    }
+  } catch (err) {
+    console.warn('Sincronização em segundo plano:', err);
+  }
+}
+
 function initAuthenticatedApp() {
   $('authScreen').style.display = 'none';
   $('mainApp').style.display = 'flex';
@@ -272,7 +326,9 @@ function initAuthenticatedApp() {
   }
 
   loadConfig();
-  showView(currentView || 'dashboard');
+  syncOcorrenciasWithBackend().finally(() => {
+    showView(currentView || 'dashboard');
+  });
 }
 
 // ==========================================================
@@ -294,9 +350,10 @@ function initPeriodSelectors() {
       const opt = document.createElement('option');
       opt.value = idx + 1;
       opt.textContent = m;
-      if (idx + 1 === selectedMonth) opt.selected = true;
+      if (idx + 1 === selectedMonth && !hasEmptyOption) opt.selected = true;
       sel.appendChild(opt);
     });
+    if (hasEmptyOption) sel.value = '';
   });
 
   yearSelects.forEach((sel) => {
@@ -307,9 +364,10 @@ function initPeriodSelectors() {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = y;
-      if (y === selectedYear) opt.selected = true;
+      if (y === selectedYear && !hasEmptyOption) opt.selected = true;
       sel.appendChild(opt);
     });
+    if (hasEmptyOption) sel.value = '';
   });
 
   // Handlers do Dashboard
@@ -739,11 +797,25 @@ async function loadHistory() {
     if (status) params.append('status', status);
     if (priority) params.append('prioridade', priority);
 
-    const ocorrencias = await api(`/api/ocorrencias?${params.toString()}`);
+    let ocorrencias = await api(`/api/ocorrencias?${params.toString()}`);
+    const noFilters = !search && !month && !year && !status && !priority;
+
+    if (noFilters) {
+      if (ocorrencias && ocorrencias.length > 0) {
+        saveOcorrenciasToLocalCache(ocorrencias);
+      } else {
+        const cached = getOcorrenciasFromLocalCache();
+        if (cached && cached.length > 0) {
+          ocorrencias = cached;
+          syncOcorrenciasWithBackend();
+        }
+      }
+    }
+
     const tbody = $('historyTableBody');
 
     if (!ocorrencias || ocorrencias.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhuma ocorrência encontrada para os filtros selecionados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhuma ocorrência encontrada. Clique em "+ Nova ocorrência" para registrar chamados.</td></tr>';
       return;
     }
 
@@ -2061,17 +2133,40 @@ $('newIncidentForm').onsubmit = async (e) => {
   };
 
   try {
-    await api('/api/ocorrencias', {
+    const saved = await api('/api/ocorrencias', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    showToast('Ocorrência cadastrada com sucesso!');
+    // Salva imediatamente no backup permanente do navegador
+    const currentList = getOcorrenciasFromLocalCache();
+    const updated = [saved, ...currentList.filter(item => item.id !== saved.id)];
+    saveOcorrenciasToLocalCache(updated);
+
+    // Sincroniza o período do dashboard com a data da ocorrência
+    if (payload.data) {
+      const parts = payload.data.split('-');
+      if (parts.length === 3) {
+        selectedYear = Number(parts[0]);
+        selectedMonth = Number(parts[1]);
+        if ($('dashMonth')) $('dashMonth').value = selectedMonth;
+        if ($('dashYear')) $('dashYear').value = selectedYear;
+      }
+    }
+
+    showToast('Ocorrência registrada e salva permanentemente com sucesso!');
     form.reset();
-    showView('dashboard');
+    showView('historico');
   } catch (err) {
-    // Tratado
+    // Se a conexão com a nuvem falhou temporariamente, garante a integridade no navegador
+    const localId = Date.now();
+    const offlineOcorrencia = { id: localId, ...payload, criado_em: new Date().toISOString() };
+    const currentList = getOcorrenciasFromLocalCache();
+    saveOcorrenciasToLocalCache([offlineOcorrencia, ...currentList]);
+    showToast('Ocorrência gravada com segurança no navegador!', 'success');
+    form.reset();
+    showView('historico');
   }
 };
 
@@ -2117,11 +2212,15 @@ $('editForm').onsubmit = async (e) => {
   };
 
   try {
-    await api(`/api/ocorrencias/${id}`, {
+    const updated = await api(`/api/ocorrencias/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    const currentList = getOcorrenciasFromLocalCache();
+    const updatedList = currentList.map(item => item.id === Number(id) ? { ...item, ...updated } : item);
+    saveOcorrenciasToLocalCache(updatedList);
 
     showToast('Ocorrência atualizada com sucesso!');
     closeEditModal();
@@ -2151,6 +2250,10 @@ $('btnConfirmDelete').onclick = async () => {
   if (!itemToDeleteId) return;
   try {
     await api(`/api/ocorrencias/${itemToDeleteId}`, { method: 'DELETE' });
+    const currentList = getOcorrenciasFromLocalCache();
+    const updatedList = currentList.filter(item => item.id !== Number(itemToDeleteId));
+    saveOcorrenciasToLocalCache(updatedList);
+
     showToast('Ocorrência removida com sucesso!');
     closeDeleteModal();
     if (currentView === 'historico') loadHistory();

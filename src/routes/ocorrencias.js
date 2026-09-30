@@ -192,9 +192,70 @@ router.delete('/:id', (req, res) => {
     }
 
     db.prepare('DELETE FROM ocorrencias WHERE id = ? AND usuario_id = ?').run(id, usuarioId);
+    try { db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
     res.json({ mensagem: 'Ocorrência excluída com sucesso.', id });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao excluir ocorrência.', detalhes: error.message });
+  }
+});
+
+// POST /api/ocorrencias/sincronizar - Sincronização e restauração inteligente em lote
+router.post('/sincronizar', (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const { ocorrencias } = req.body;
+
+    if (!Array.isArray(ocorrencias) || ocorrencias.length === 0) {
+      const allCurrent = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
+      return res.json({ restauradas: 0, total: allCurrent.length, ocorrencias: allCurrent });
+    }
+
+    const checkStmt = db.prepare(`
+      SELECT id FROM ocorrencias
+      WHERE usuario_id = ? AND data = ? AND setor = ? AND problema = ?
+    `);
+
+    const insertStmt = db.prepare(`
+      INSERT INTO ocorrencias (
+        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let restauradas = 0;
+    for (const item of ocorrencias) {
+      if (!item || !item.problema || !item.setor) continue;
+      const dataVal = item.data ? String(item.data).slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const setorVal = String(item.setor).trim();
+      const problemaVal = String(item.problema).trim();
+
+      const exists = checkStmt.get(usuarioId, dataVal, setorVal, problemaVal);
+      if (!exists) {
+        insertStmt.run(
+          usuarioId,
+          dataVal,
+          setorVal,
+          item.tipo_problema || 'Outro',
+          problemaVal,
+          item.diagnostico ? String(item.diagnostico).trim() : '',
+          item.o_que_foi_feito ? String(item.o_que_foi_feito).trim() : '',
+          item.status || 'Aberto',
+          item.prioridade || 'Normal'
+        );
+        restauradas++;
+      }
+    }
+
+    try { db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
+
+    const allUpdated = db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
+    res.json({
+      mensagem: `${restauradas} ocorrência(s) restaurada(s) e sincronizada(s) com sucesso!`,
+      restauradas,
+      total: allUpdated.length,
+      ocorrencias: allUpdated
+    });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao sincronizar ocorrências.', detalhes: error.message });
   }
 });
 
