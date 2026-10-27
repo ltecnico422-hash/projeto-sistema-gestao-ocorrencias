@@ -3,8 +3,10 @@ const cors = require('cors');
 const path = require('node:path');
 const fs = require('node:fs');
 
-// Inicializa banco de dados
+// Inicializa banco de dados e executa seed caso necessário
 require('./database/db');
+const runSeed = require('./database/seed');
+runSeed().catch(err => console.error('[Servidor] Erro ao executar seed:', err.message));
 
 const app = express();
 const PORT = process.env.PORT || 3000;

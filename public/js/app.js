@@ -314,6 +314,15 @@ async function syncOcorrenciasWithBackend() {
   }
 }
 
+function updateHudClock() {
+  const el = $('hudClock');
+  if (el) {
+    const d = new Date();
+    el.textContent = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+}
+setInterval(updateHudClock, 1000);
+
 function initAuthenticatedApp() {
   $('authScreen').style.display = 'none';
   $('mainApp').style.display = 'flex';
@@ -325,6 +334,7 @@ function initAuthenticatedApp() {
     $('topAvatarLetter').textContent = initial;
   }
 
+  updateHudClock();
   loadConfig();
   syncOcorrenciasWithBackend().finally(() => {
     showView(currentView || 'dashboard');
@@ -339,8 +349,8 @@ function initPeriodSelectors() {
   const currentYear = new Date().getFullYear();
   const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1];
 
-  const monthSelects = [$('dashMonth'), $('reportMonthSelect'), $('historyMonth'), $('prodMonthSelect')];
-  const yearSelects = [$('dashYear'), $('reportYearSelect'), $('historyYear'), $('prodYearSelect')];
+  const monthSelects = [$('dashMonth'), $('reportMonthSelect'), $('historyMonth'), $('prodMonthSelect'), $('execReportMonthSelect')];
+  const yearSelects = [$('dashYear'), $('reportYearSelect'), $('historyYear'), $('prodYearSelect'), $('execReportYearSelect')];
 
   monthSelects.forEach((sel) => {
     if (!sel) return;
@@ -396,6 +406,20 @@ function initPeriodSelectors() {
   }
   if ($('prodYearSelect')) {
     $('prodYearSelect').onchange = () => generateProductivityReport();
+  }
+
+  // Handlers do Relatório Executivo Modelo 3
+  if ($('execReportMonthSelect')) {
+    $('execReportMonthSelect').onchange = (e) => {
+      selectedMonth = Number(e.target.value);
+      loadExecutiveReport();
+    };
+  }
+  if ($('execReportYearSelect')) {
+    $('execReportYearSelect').onchange = (e) => {
+      selectedYear = Number(e.target.value);
+      loadExecutiveReport();
+    };
   }
 
   // Handlers do Histórico
@@ -539,6 +563,19 @@ async function loadDashboard() {
     if ($('metricResolved')) $('metricResolved').textContent = data.indicadores.resolvidas;
     if ($('metricProgress')) $('metricProgress').textContent = data.indicadores.em_andamento;
     if ($('metricHigh')) $('metricHigh').textContent = data.indicadores.alta_prioridade;
+    if ($('metricSobreaviso')) $('metricSobreaviso').textContent = data.indicadores.sobreaviso || 0;
+    if ($('metricResolvidoPct')) $('metricResolvidoPct').textContent = `${data.indicadores.taxa_resolucao || 0}%`;
+
+    if ($('metricTrendTotal')) {
+      const varPct = data.indicadores.variacao_pct || 0;
+      if (varPct >= 0) {
+        $('metricTrendTotal').className = 'trend-badge up';
+        $('metricTrendTotal').textContent = `+${varPct}% vs anterior`;
+      } else {
+        $('metricTrendTotal').className = 'trend-badge down';
+        $('metricTrendTotal').textContent = `${varPct}% vs anterior`;
+      }
+    }
 
     // Atualiza barra proporcional de status
     if ($('barDone')) $('barDone').style.width = `${data.percentuais.resolvidas_pct}%`;
@@ -552,6 +589,30 @@ async function loadDashboard() {
     // Renderiza o novo gráfico interativo com base na aba ativa
     renderCategoryChart(data);
 
+    // Renderiza lista de pendências bloqueadas aguardando terceiros
+    const pendingBlockList = $('pendingBlockReasonsList');
+    if (pendingBlockList) {
+      if (!data.bloqueios_pendentes || data.bloqueios_pendentes.length === 0) {
+        pendingBlockList.innerHTML = '<div style="font-size: 12.5px; color: var(--green); padding: 12px; font-weight: 600;">✓ Nenhuma pendência com bloqueio externo no período. Fluxo 100% nominal!</div>';
+      } else {
+        pendingBlockList.innerHTML = data.bloqueios_pendentes.map(item => `
+          <div class="pending-block-item" onclick="openEditModal(${item.id})" title="Clique para editar justificativa">
+            <div style="font-weight: 700; font-size: 13.5px; color: #ffffff;">
+              ${escapeHtml(item.setor)} — ${escapeHtml(item.problema)}
+            </div>
+            <div style="font-size: 12px; color: #fbbf24; margin-top: 4px;">
+              <strong>Motivo do Impedimento:</strong> ${escapeHtml(item.motivo_bloqueio || 'Aguardando ação, compras ou atendimento de terceiro')}
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 6px; align-items: center;">
+              <span class="badge ${clsStatus(item.status)}">${escapeHtml(item.status)}</span>
+              <span class="badge ${clsPriority(item.prioridade)}">${escapeHtml(item.prioridade)}</span>
+              <span style="font-size: 11.5px; color: var(--cyan); font-weight: 600; margin-left: auto;">Editar justificativa &rarr;</span>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
     // Atualiza lista de atividades recentes com itens interativos clicáveis
     const recentList = $('recentActivitiesList');
     if (!data.atividades_recentes || data.atividades_recentes.length === 0) {
@@ -562,10 +623,12 @@ async function loadDashboard() {
           <div class="activity-info">
             <strong>${escapeHtml(item.setor)} — ${formatDate(item.data)}</strong>
             <p>${escapeHtml(item.problema)}</p>
+            ${item.motivo_bloqueio ? `<div style="font-size: 11.5px; color: #fbbf24; margin-top: 2px;"><b>Bloqueio:</b> ${escapeHtml(item.motivo_bloqueio)}</div>` : ''}
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            ${item.em_sobreaviso ? '<span class="badge badge-sobreaviso" style="font-size: 10px;">🌙 Sobreaviso</span>' : ''}
             <span class="badge ${clsStatus(item.status)}">${escapeHtml(item.status)}</span>
-            <span style="font-size: 11.5px; color: var(--blue); font-weight: 600;">Ver &rarr;</span>
+            <span style="font-size: 11.5px; color: var(--cyan); font-weight: 600;">Ver &rarr;</span>
           </div>
         </div>
       `).join('');
@@ -821,19 +884,24 @@ async function loadHistory() {
 
     tbody.innerHTML = ocorrencias.map((item) => `
       <tr>
-        <td style="font-weight: 600; color: var(--blue);">${formatDate(item.data)}</td>
+        <td class="table-date">${formatDate(item.data)}</td>
         <td>
-          <strong style="color: var(--ink);">${escapeHtml(item.setor)}</strong><br>
-          <small style="color: var(--muted);">${escapeHtml(item.tipo_problema)}</small>
+          <strong class="table-sector">${escapeHtml(item.setor)}</strong><br>
+          <small class="table-type">${escapeHtml(item.tipo_problema)}</small>
         </td>
         <td>
-          <div style="font-weight: 500; color: #222;">${escapeHtml(item.problema)}</div>
-          ${item.o_que_foi_feito ? `<small style="color: var(--muted); display: block; margin-top: 3px;"><b>Feito:</b> ${escapeHtml(item.o_que_foi_feito)}</small>` : ''}
+          <div class="table-problem">
+            ${escapeHtml(item.problema)}
+            ${item.em_sobreaviso ? '<span class="badge badge-sobreaviso" style="margin-left: 6px; font-size: 10.5px;">🌙 Sobreaviso</span>' : ''}
+          </div>
+          ${item.o_que_foi_feito ? `<small class="table-feito"><b>Feito:</b> ${escapeHtml(item.o_que_foi_feito)}</small>` : ''}
+          ${item.motivo_bloqueio ? `<small class="badge badge-bloqueio" style="display: inline-block; margin-top: 4px;"><b>Impedimento:</b> ${escapeHtml(item.motivo_bloqueio)}</small>` : ''}
         </td>
         <td><span class="badge ${clsStatus(item.status)}">${escapeHtml(item.status)}</span></td>
         <td><span class="badge ${clsPriority(item.prioridade)}">${escapeHtml(item.prioridade)}</span></td>
         <td>
           <div class="table-actions">
+            <button class="btn btn-light btn-sm" onclick="duplicateOccurrence(${item.id})" title="Duplicar para novo registro rápido">⧉ Duplicar</button>
             <button class="btn btn-light btn-sm" onclick="openEditModal(${item.id})">Editar</button>
             <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${item.id})">Excluir</button>
           </div>
@@ -907,6 +975,8 @@ function initReportView() {
   switchReportModel(currentReportModel, false);
   if (currentReportModel === 'existente') {
     loadReport();
+  } else if (currentReportModel === 'dashboard') {
+    loadExecutiveReport();
   } else {
     initProductivityView();
   }
@@ -918,18 +988,24 @@ function switchReportModel(model, triggerLoad = true) {
 
   const btnExistente = $('tabReportExistingBtn');
   const btnProd = $('tabReportProductivityBtn');
+  const btnDash = $('tabReportDashboardBtn');
   const containerExistente = $('reportModelExistingContainer');
   const containerProd = $('reportModelProductivityContainer');
+  const containerDash = $('reportModelDashboardContainer');
 
   if (btnExistente) btnExistente.classList.toggle('active', model === 'existente');
   if (btnProd) btnProd.classList.toggle('active', model === 'produtividade');
+  if (btnDash) btnDash.classList.toggle('active', model === 'dashboard');
 
   if (containerExistente) containerExistente.style.display = model === 'existente' ? 'block' : 'none';
   if (containerProd) containerProd.style.display = model === 'produtividade' ? 'block' : 'none';
+  if (containerDash) containerDash.style.display = model === 'dashboard' ? 'block' : 'none';
 
   if (triggerLoad) {
     if (model === 'existente') {
       loadReport();
+    } else if (model === 'dashboard') {
+      loadExecutiveReport();
     } else {
       initProductivityView();
     }
@@ -1922,7 +1998,7 @@ async function openSavedReportsModal() {
       <tr>
         <td>
           <strong>${escapeHtml(item.titulo)}</strong>
-          ${item.periodo_inicio ? `<br><small style="color:#666;">${formatDate(item.periodo_inicio)} até ${formatDate(item.periodo_fim || '')}</small>` : ''}
+          ${item.periodo_inicio ? `<br><small style="color: #94a3b8;">${formatDate(item.periodo_inicio)} até ${formatDate(item.periodo_fim || '')}</small>` : ''}
         </td>
         <td>
           <span class="badge ${item.tipo === 'produtividade' ? 'done' : 'wait'}">${item.tipo === 'produtividade' ? 'Produtividade' : 'Gerencial'}</span>
@@ -1937,7 +2013,7 @@ async function openSavedReportsModal() {
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="4" class="empty" style="color:red;">Erro ao listar: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="empty" style="color: #ff5577;">Erro ao listar: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -2129,7 +2205,9 @@ $('newIncidentForm').onsubmit = async (e) => {
     status: form.status.value,
     problema: form.problema.value.trim(),
     diagnostico: form.diagnostico.value.trim(),
-    o_que_foi_feito: form.o_que_foi_feito.value.trim()
+    o_que_foi_feito: form.o_que_foi_feito.value.trim(),
+    em_sobreaviso: $('newSobreaviso') ? Boolean($('newSobreaviso').checked) : false,
+    motivo_bloqueio: $('newMotivoBloqueio') ? $('newMotivoBloqueio').value.trim() : ''
   };
 
   try {
@@ -2157,6 +2235,7 @@ $('newIncidentForm').onsubmit = async (e) => {
 
     showToast('Ocorrência registrada e salva permanentemente com sucesso!');
     form.reset();
+    toggleBlockReasonField('Aberto', 'newBlockReasonWrap');
     showView('historico');
   } catch (err) {
     // Se a conexão com a nuvem falhou temporariamente, garante a integridade no navegador
@@ -2166,6 +2245,7 @@ $('newIncidentForm').onsubmit = async (e) => {
     saveOcorrenciasToLocalCache([offlineOcorrencia, ...currentList]);
     showToast('Ocorrência gravada com segurança no navegador!', 'success');
     form.reset();
+    toggleBlockReasonField('Aberto', 'newBlockReasonWrap');
     showView('historico');
   }
 };
@@ -2186,6 +2266,9 @@ async function openEditModal(id) {
     $('editProblema').value = item.problema;
     $('editDiagnostico').value = item.diagnostico || '';
     $('editFeito').value = item.o_que_foi_feito || '';
+    if ($('editSobreaviso')) $('editSobreaviso').checked = Boolean(item.em_sobreaviso);
+    if ($('editMotivoBloqueio')) $('editMotivoBloqueio').value = item.motivo_bloqueio || '';
+    toggleBlockReasonField(item.status, 'editBlockReasonWrap');
 
     $('modalEdit').classList.add('active');
   } catch (err) {
@@ -2208,7 +2291,9 @@ $('editForm').onsubmit = async (e) => {
     status: $('editStatus').value,
     problema: $('editProblema').value.trim(),
     diagnostico: $('editDiagnostico').value.trim(),
-    o_que_foi_feito: $('editFeito').value.trim()
+    o_que_foi_feito: $('editFeito').value.trim(),
+    em_sobreaviso: $('editSobreaviso') ? Boolean($('editSobreaviso').checked) : false,
+    motivo_bloqueio: $('editMotivoBloqueio') ? $('editMotivoBloqueio').value.trim() : ''
   };
 
   try {
@@ -2226,7 +2311,11 @@ $('editForm').onsubmit = async (e) => {
     closeEditModal();
     if (currentView === 'historico') loadHistory();
     if (currentView === 'dashboard') loadDashboard();
-    if (currentView === 'relatorio') loadReport();
+    if (currentView === 'relatorio') {
+      if (currentReportModel === 'dashboard') loadExecutiveReport();
+      else if (currentReportModel === 'existente') loadReport();
+      else initProductivityView();
+    }
   } catch (err) {
     // Tratado
   }
@@ -2403,6 +2492,341 @@ if (changePasswordForm) {
       // Notificação tratada no api()
     }
   };
+}
+
+// ==========================================================
+// FUNÇÕES AUXILIARES, MODELO 3 EXECUTIVO E EXPURGO SEGURO (SOLUÇÃO 3)
+// ==========================================================
+
+function toggleBlockReasonField(statusVal, wrapId) {
+  const wrap = $(wrapId);
+  if (!wrap) return;
+  if (statusVal === 'Resolvido') {
+    wrap.style.display = 'none';
+  } else {
+    wrap.style.display = 'block';
+  }
+}
+
+function applyQuickTemplate(type) {
+  const form = $('newIncidentForm');
+  if (!form) return;
+
+  const templates = {
+    impressora: {
+      tipo: 'Impressão',
+      prioridade: 'Normal',
+      status: 'Resolvido',
+      problema: 'Impressora não imprime / travamento na fila de impressão (Spooler)',
+      diagnostico: 'Serviço de Spooler do Windows travado ou documento corrompido retido na fila.',
+      feito: 'Reiniciado o serviço Spooler de impressão via services.msc, expurgados arquivos corrompidos da pasta de spool e impressa página de teste com sucesso.'
+    },
+    mvsoul: {
+      tipo: 'Software',
+      prioridade: 'Alta',
+      status: 'Resolvido',
+      problema: 'Usuário sem acesso ao sistema MV SOUL / tela de login congelada',
+      diagnostico: 'Sessão travada no servidor ou cache corrompido do launcher MV.',
+      feito: 'Finalizada a sessão anterior travada, limpo o cache local da aplicação MV, validada a conectividade com a base e efetuado login com êxito.'
+    },
+    ponto: {
+      tipo: 'Hardware',
+      prioridade: 'Normal',
+      status: 'Resolvido',
+      problema: 'Relógio de ponto biométrico não reconhece digital de colaboradores',
+      diagnostico: 'Sensor óptico com acúmulo de poeira e necessidade de sincronização.',
+      feito: 'Higienização técnica do prisma óptico com álcool isopropílico, reinicialização e sincronização da base de biometria.'
+    },
+    rede: {
+      tipo: 'Rede/Internet',
+      prioridade: 'Alta',
+      status: 'Resolvido',
+      problema: 'Estação sem conectividade de rede local e sem acesso à internet',
+      diagnostico: 'Trava do conector RJ45 danificada ou mal contato na tomada de rede.',
+      feito: 'Substituído conector RJ45 padrão T568A/B com nova crimpagem, testada a continuidade com testador de cabo e link restabelecido a 1Gbps.'
+    },
+    formatacao: {
+      tipo: 'Hardware',
+      prioridade: 'Normal',
+      status: 'Resolvido',
+      problema: 'Formatação, instalação de imagem limpa e homologação de máquina',
+      diagnostico: 'Lentidão operacional ou remanejamento de estação de trabalho para novo usuário.',
+      feito: 'Instalação limpa do Windows 10/11 Pro com imagem institucional padrão, pacote Office, antivírus corporativo, certificados digitais e cliente MV SOUL.'
+    },
+    preventiva: {
+      tipo: 'Hardware',
+      prioridade: 'Baixa',
+      status: 'Resolvido',
+      problema: 'Manutenção preventiva periódica de computadores e periféricos',
+      diagnostico: 'Rotina de prevenção técnica para evitar superaquecimento e lentidão.',
+      feito: 'Limpeza física interna de gabinete, ventoinhas e fonte, substituição de pasta térmica nos processadores, verificação de integridade de disco (SMART) e organização de cabos.'
+    }
+  };
+
+  const tpl = templates[type];
+  if (!tpl) return;
+
+  if (form.tipo_problema) form.tipo_problema.value = tpl.tipo;
+  if (form.prioridade) form.prioridade.value = tpl.prioridade;
+  if (form.status) form.status.value = tpl.status;
+  if (form.problema) form.problema.value = tpl.problema;
+  if (form.diagnostico) form.diagnostico.value = tpl.diagnostico;
+  if (form.o_que_foi_feito) form.o_que_foi_feito.value = tpl.feito;
+
+  toggleBlockReasonField(tpl.status, 'newBlockReasonWrap');
+
+  if (form.setor) {
+    form.setor.focus();
+  }
+  showToast(`Modelo rápido "${tpl.tipo}" aplicado com sucesso! Informe o setor.`, 'success');
+}
+
+async function duplicateOccurrence(id) {
+  try {
+    const item = await api(`/api/ocorrencias/${id}`);
+    showView('novo');
+    const form = $('newIncidentForm');
+    if (!form) return;
+    if (form.tipo_problema) form.tipo_problema.value = item.tipo_problema;
+    if (form.prioridade) form.prioridade.value = item.prioridade;
+    if (form.status) form.status.value = item.status;
+    if (form.problema) form.problema.value = item.problema;
+    if (form.diagnostico) form.diagnostico.value = item.diagnostico || '';
+    if (form.o_que_foi_feito) form.o_que_foi_feito.value = item.o_que_foi_feito || '';
+    if (form.data) form.data.value = new Date().toISOString().slice(0, 10);
+    if ($('newSobreaviso')) $('newSobreaviso').checked = Boolean(item.em_sobreaviso);
+    if ($('newMotivoBloqueio')) $('newMotivoBloqueio').value = item.motivo_bloqueio || '';
+    toggleBlockReasonField(item.status, 'newBlockReasonWrap');
+    if (form.setor) {
+      form.setor.value = item.setor;
+      form.setor.focus();
+    }
+    showToast('Ocorrência duplicada! Ajuste o setor ou data se necessário.', 'success');
+  } catch (err) {
+    console.error('Erro ao duplicar ocorrência:', err);
+    showToast('Erro ao carregar dados da ocorrência para duplicar.', 'error');
+  }
+}
+
+// ----------------------------------------------------------
+// MODELO 3: RELATÓRIO EXECUTIVO DASHBOARD E TELEMETRIA
+// ----------------------------------------------------------
+
+let currentExecReportData = null;
+
+async function loadExecutiveReport() {
+  try {
+    const data = await api(`/api/relatorio?mes=${selectedMonth}&ano=${selectedYear}`);
+    currentExecReportData = data;
+
+    if ($('execReportMonthSelect')) $('execReportMonthSelect').value = selectedMonth;
+    if ($('execReportYearSelect')) $('execReportYearSelect').value = selectedYear;
+
+    if (data.config) {
+      if ($('execHospitalTitle')) $('execHospitalTitle').textContent = data.config.nome_hospital || 'Hospital Regional Nossa Senhora do Bom Conselho';
+      if ($('execSectorSubtitle')) $('execSectorSubtitle').textContent = `${data.config.setor || 'Tecnologia da Informação'} — Relatório Executivo de Telemetria`;
+      if ($('execSectorText')) $('execSectorText').textContent = data.config.setor || 'Tecnologia da Informação';
+      if ($('execResponsibleText')) $('execResponsibleText').textContent = data.config.nome_responsavel || currentUser?.nome || 'Não informado';
+      if ($('execSigTechName')) $('execSigTechName').textContent = data.config.nome_responsavel || currentUser?.nome || 'Responsável Técnico';
+      if ($('execSigTechSector')) $('execSigTechSector').textContent = data.config.setor || 'Tecnologia da Informação';
+      if (data.config.logo_path && $('execReportLogo')) {
+        $('execReportLogo').src = `/${data.config.logo_path}?t=${Date.now()}`;
+        $('execReportLogo').style.display = 'block';
+      }
+    }
+
+    if ($('execPeriodText')) $('execPeriodText').textContent = data.periodoLabel || `${selectedMonth}/${selectedYear}`;
+    if ($('execIssueDate')) $('execIssueDate').textContent = data.emissao || new Date().toLocaleDateString('pt-BR');
+    if ($('execAuthHash')) $('execAuthHash').textContent = data.hashAutenticidade || 'TI-HR-2026-X892';
+    if ($('execStampHash')) $('execStampHash').textContent = `HASH: ${data.hashAutenticidade || 'TI-HR-2026-X892'}-OK`;
+
+    // Resumo Narrativo Formal
+    if ($('execNarrativeText')) {
+      $('execNarrativeText').textContent = data.resumoNarrativoFormal || 'Sem dados registrados no período.';
+    }
+
+    // 4 KPIs
+    const ind = data.indicadores || {};
+    if ($('execKpiTotal')) $('execKpiTotal').textContent = ind.total || 0;
+    if ($('execKpiTotalSub')) $('execKpiTotalSub').textContent = `${ind.total || 0} chamados registrados`;
+    if ($('execKpiTaxa')) $('execKpiTaxa').textContent = `${ind.taxa_resolucao || 0}%`;
+    if ($('execKpiTaxaSub')) $('execKpiTaxaSub').textContent = `${ind.resolvidas || 0} chamados sanados`;
+    if ($('execKpiSobreaviso')) $('execKpiSobreaviso').textContent = ind.sobreaviso || 0;
+    if ($('execKpiCriticos')) $('execKpiCriticos').textContent = ind.alta_prioridade || 0;
+
+    // Top Setores
+    const sectorsContainer = $('execTopSectorsList');
+    if (sectorsContainer) {
+      if (!data.topSetores || data.topSetores.length === 0) {
+        sectorsContainer.innerHTML = '<div class="empty" style="padding: 12px 0; color: #64748b;">Nenhum chamado registrado no período.</div>';
+      } else {
+        const maxSector = Math.max(...data.topSetores.map(s => Number(s.count) || 1));
+        sectorsContainer.innerHTML = data.topSetores.map(s => {
+          const count = Number(s.count);
+          const pct = Math.round((count / (ind.total || 1)) * 100);
+          const barPct = Math.round((count / maxSector) * 100);
+          return `
+            <div class="exec-rank-row">
+              <div class="exec-rank-info">
+                <span><b>${escapeHtml(s.setor)}</b></span>
+                <span>${count} chamado(s) (${pct}%)</span>
+              </div>
+              <div class="exec-rank-bar">
+                <div class="exec-rank-fill blue" style="width: ${barPct}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // Top Tipos
+    const typesContainer = $('execTopTypesList');
+    if (typesContainer) {
+      if (!data.topTipos || data.topTipos.length === 0) {
+        typesContainer.innerHTML = '<div class="empty" style="padding: 12px 0; color: #64748b;">Nenhum chamado registrado no período.</div>';
+      } else {
+        const maxType = Math.max(...data.topTipos.map(t => Number(t.count) || 1));
+        typesContainer.innerHTML = data.topTipos.map(t => {
+          const count = Number(t.count);
+          const pct = Math.round((count / (ind.total || 1)) * 100);
+          const barPct = Math.round((count / maxType) * 100);
+          return `
+            <div class="exec-rank-row">
+              <div class="exec-rank-info">
+                <span><b>${escapeHtml(t.tipo_problema)}</b></span>
+                <span>${count} chamado(s) (${pct}%)</span>
+              </div>
+              <div class="exec-rank-bar">
+                <div class="exec-rank-fill purple" style="width: ${barPct}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // Pendências com Bloqueio Externo
+    const blockedContainer = $('execBlockedList');
+    if (blockedContainer) {
+      if (!data.pendenciasBloqueios || data.pendenciasBloqueios.length === 0) {
+        blockedContainer.innerHTML = `
+          <div style="font-size: 12.5px; color: #15803d; font-weight: 600; padding: 6px 0;">
+            ✓ Todas as ocorrências registradas no período foram solucionadas com êxito! Sem bloqueios pendentes.
+          </div>
+        `;
+      } else {
+        blockedContainer.innerHTML = data.pendenciasBloqueios.map(item => `
+          <div class="exec-block-item">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <strong>${escapeHtml(item.setor)} — ${formatDate(item.data)}</strong>
+              <span class="badge ${clsPriority(item.prioridade)}">${escapeHtml(item.prioridade)}</span>
+            </div>
+            <div style="margin-top: 4px; font-weight: 500; color: #334155;">${escapeHtml(item.problema)}</div>
+            <div class="exec-block-reason">
+              <strong>Motivo do Impedimento:</strong> ${escapeHtml(item.motivo_bloqueio || 'Aguardando aquisição de peças, substituição por garantia ou atendimento de terceiros.')}
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao carregar relatório executivo:', err);
+    showToast('Falha ao carregar relatório executivo.', 'error');
+  }
+}
+
+function syncExecReportPeriod() {
+  const m = $('execReportMonthSelect')?.value;
+  const y = $('execReportYearSelect')?.value;
+  if (m) selectedMonth = Number(m);
+  if (y) selectedYear = Number(y);
+  if ($('dashMonth')) $('dashMonth').value = selectedMonth;
+  if ($('dashYear')) $('dashYear').value = selectedYear;
+  if ($('reportMonthSelect')) $('reportMonthSelect').value = selectedMonth;
+  if ($('reportYearSelect')) $('reportYearSelect').value = selectedYear;
+  loadExecutiveReport();
+}
+
+function recalcNarrativeSummary() {
+  if (currentExecReportData && currentExecReportData.resumoNarrativoFormal) {
+    $('execNarrativeText').textContent = currentExecReportData.resumoNarrativoFormal;
+    showToast('Resumo narrativo restabelecido com sucesso!', 'success');
+  }
+}
+
+// ----------------------------------------------------------
+// SOLUÇÃO 3: EXPURGO SEGURO COM BACKUP AUTOMÁTICO EM EXCEL
+// ----------------------------------------------------------
+
+async function executarExpurgoSeguro() {
+  const select = $('expurgoDiasSelect');
+  const dias = select ? select.value : '90';
+  const labelDias = select?.options[select.selectedIndex]?.text || `${dias} dias`;
+
+  const confirmMsg = `ATENÇÃO: Você solicitou a limpeza segura do banco de dados para ocorrências com mais de ${labelDias}.\n\n` +
+    `• O sistema fará o download AUTOMÁTICO de uma planilha Excel (.xlsx) completa com todas as ocorrências antes de apagá-las.\n` +
+    `• Deseja continuar e liberar espaço no banco de dados agora?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const btn = $('btnExecutarExpurgo');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Gerando backup Excel e liberando espaço...';
+  }
+
+  try {
+    const res = await api('/api/configuracoes/expurgar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dias: Number(dias) })
+    });
+
+    if (res.totalRemovidos === 0) {
+      showToast(res.mensagem || 'Nenhuma ocorrência antiga encontrada para expurgo.', 'success');
+      return;
+    }
+
+    // Download automático do backup em Excel (.xlsx)
+    if (res.arquivoBase64) {
+      const byteCharacters = atob(res.arquivoBase64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = res.nomeArquivo || `backup_expurgo_${dias}dias.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Atualiza cache local
+    const localList = getOcorrenciasFromLocalCache();
+    if (res.dataCorte && localList.length > 0) {
+      const updatedLocal = localList.filter(item => item.data >= res.dataCorte);
+      saveOcorrenciasToLocalCache(updatedLocal);
+    }
+
+    showToast(`✓ Sucesso! ${res.mensagem} Backup Excel salvo no seu computador!`, 'success');
+
+    if (currentView === 'historico') loadHistory();
+    if (currentView === 'dashboard') loadDashboard();
+  } catch (err) {
+    console.error('Erro ao executar expurgo:', err);
+    showToast(err.message || 'Erro ao realizar expurgo.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🧹 Expurgar e Baixar Backup Excel';
+    }
+  }
 }
 
 // ==========================================================

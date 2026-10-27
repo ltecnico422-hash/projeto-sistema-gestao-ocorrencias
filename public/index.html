@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TI Hospital Regional — Gestão de Ocorrências</title>
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css?v=3">
   <link rel="icon" href="/uploads/logo.png" type="image/png">
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#07356f">
+  <meta name="theme-color" content="#070d18">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -44,7 +47,7 @@
         <input type="password" id="loginSenha" required placeholder="Sua senha de acesso">
       </div>
       <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
-        <a href="javascript:void(0)" onclick="switchAuthTab('recuperar')" style="font-size: 12.5px; color: var(--blue); text-decoration: none; font-weight: 600;">
+        <a href="javascript:void(0)" onclick="switchAuthTab('recuperar')" style="font-size: 12.5px; color: var(--cyan); text-decoration: none; font-weight: 600;">
           Esqueceu a senha?
         </a>
       </div>
@@ -70,8 +73,8 @@
 
     <!-- Formulário de Recuperação de Senha -->
     <form id="recuperarForm" style="display: none;">
-      <div style="background: #edf4fb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: var(--ink); line-height: 1.4;">
-        🔒 <strong>Recuperação de Acesso:</strong> Digite seu e-mail cadastrado e crie uma nova senha. Todas as suas ocorrências e relatórios continuam preservados no sistema.
+      <div style="background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.28); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12.5px; color: #e2e8f0; line-height: 1.5;">
+        🔒 <strong style="color: var(--cyan);">Recuperação de Acesso:</strong> Digite seu e-mail cadastrado e crie uma nova senha. Todas as suas ocorrências e relatórios continuam preservados no sistema.
       </div>
       <div class="field" style="margin-bottom: 14px;">
         <label for="recEmail">E-mail cadastrado</label>
@@ -151,6 +154,11 @@
           <h1 id="pageTitle">Visão geral</h1>
           <p id="pageSubtitle">Controle profissional e indicadores em tempo real da operação de T.I.</p>
         </div>
+        <div class="hud-telemetry-bar">
+          <div class="hud-item"><span class="hud-pulse-dot"></span> <b class="hud-label">STATUS:</b> <span class="hud-val">ONLINE [NOMINAL]</span></div>
+          <div class="hud-item"><span class="hud-icon">⚡</span> <b class="hud-label">NÚCLEO:</b> <span class="hud-val">T.I. OPERACIONAL</span></div>
+          <div class="hud-item hud-time" id="hudClock">14:55</div>
+        </div>
       </div>
       <div class="top-actions">
         <button class="btn btn-success btn-sm" id="btnInstallPwa" style="display: none;" onclick="installPwa()">
@@ -215,6 +223,7 @@
               <div>
                 <div class="metric-label">TOTAL DE OCORRÊNCIAS</div>
                 <div id="metricTotal" class="metric-value">0</div>
+                <div id="metricTrendTotal" class="metric-trend-badge up">-- vs mês ant.</div>
               </div>
               <div class="metric-icon">▦</div>
             </div>
@@ -229,6 +238,7 @@
               <div>
                 <div class="metric-label">RESOLVIDAS</div>
                 <div id="metricResolved" class="metric-value">0</div>
+                <div id="metricResolvidoPct" style="font-size: 11px; color: var(--green); font-weight: 700; margin-top: 3px;">0% de resolutividade</div>
               </div>
               <div class="metric-icon">✓</div>
             </div>
@@ -243,6 +253,7 @@
               <div>
                 <div class="metric-label">EM ANDAMENTO</div>
                 <div id="metricProgress" class="metric-value">0</div>
+                <div style="font-size: 11px; color: var(--orange); font-weight: 600; margin-top: 3px;">Aguardando ação</div>
               </div>
               <div class="metric-icon">◷</div>
             </div>
@@ -252,11 +263,27 @@
             </div>
           </div>
 
+          <div class="card purple metric-card interactive-card" onclick="filterHistoryFromCard('sobreaviso')" title="Clique para ver ocorrências em sobreaviso e fins de semana" role="button" tabindex="0">
+            <div class="metric">
+              <div>
+                <div class="metric-label">SOBREAVISO / FINS DE SEMANA</div>
+                <div id="metricSobreaviso" class="metric-value">0</div>
+                <div style="font-size: 11px; color: #d8b4fe; font-weight: 600; margin-top: 3px;">Fora do expediente</div>
+              </div>
+              <div class="metric-icon">🌙</div>
+            </div>
+            <div class="card-action">
+              <span>Ver sobreavisos</span>
+              <span class="arrow">&rarr;</span>
+            </div>
+          </div>
+
           <div class="card red metric-card interactive-card" onclick="filterHistoryFromCard('alta')" title="Clique para ver ocorrências de alta prioridade e urgentes" role="button" tabindex="0">
             <div class="metric">
               <div>
                 <div class="metric-label">ALTA PRIORIDADE / URGENTE</div>
                 <div id="metricHigh" class="metric-value">0</div>
+                <div style="font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 3px;">Intervenção crítica</div>
               </div>
               <div class="metric-icon">!</div>
             </div>
@@ -330,6 +357,22 @@
             </div>
           </div>
         </div>
+
+        <!-- Painel de Demandas Pendentes com Justificativa de Bloqueio (Blindagem) -->
+        <div class="card" style="margin-top: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 14px;">
+            <div>
+              <h3 style="color: var(--orange); display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span> Justificativa de Pendências & Demandas em Aberto
+              </h3>
+              <p style="font-size: 12px; color: var(--muted); margin-top: 2px;">Mapeamento de chamados não concluídos que dependem de compras, almoxarifado ou fornecedores</p>
+            </div>
+            <span class="badge yellow" id="countPendenciasBadge">0 pendências</span>
+          </div>
+          <div id="pendingBlockReasonsList" class="activity-list">
+            <div class="empty">Nenhuma pendência ou chamado travado no período. Operação 100% em dia!</div>
+          </div>
+        </div>
       </div>
 
       <!-- ============================================== -->
@@ -340,6 +383,22 @@
           <div>
             <div class="eyebrow">Registro operacional</div>
             <h2>Nova ocorrência</h2>
+          </div>
+        </div>
+
+        <!-- Barra de Atalhos Rápidos de 1 Clique -->
+        <div class="quick-templates-bar">
+          <div class="quick-templates-header">
+            <span class="quick-templates-title">⚡ Lançamento Rápido em 1 Clique (Templates Frequentes):</span>
+            <small style="color: var(--muted); font-size: 11.5px;">Preenche categorias e textos comuns instantaneamente</small>
+          </div>
+          <div class="quick-chips-grid">
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('impressora')">🖨️ Impressora / Spooler</button>
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('mvsoul')">🏥 Acesso / MV SOUL</button>
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('ponto')">🕒 Ponto Biométrico</button>
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('rede')">🌐 Cabo / Conector RJ45</button>
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('formatacao')">🖥️ Formatação / Imagem</button>
+            <button type="button" class="quick-chip" onclick="applyQuickTemplate('preventiva')">🛡️ Preventiva de Estação</button>
           </div>
         </div>
 
@@ -393,11 +452,23 @@
 
               <div class="field">
                 <label for="newStatus">Status inicial *</label>
-                <select id="newStatus" name="status" required>
+                <select id="newStatus" name="status" required onchange="toggleBlockReasonField(this.value, 'newBlockReasonWrap')">
                   <option value="Aberto">Aberto</option>
                   <option value="Em andamento">Em andamento</option>
-                  <option value="Resolvido">Resolvido</option>
+                  <option value="Resolvido" selected>Resolvido</option>
                 </select>
+              </div>
+
+              <div class="field" style="display: flex; align-items: flex-end;">
+                <label class="sobreaviso-checkbox-wrap" style="width: 100%;">
+                  <input type="checkbox" id="newSobreaviso" name="em_sobreaviso" value="1">
+                  <span>🌙 Atendimento em Sobreaviso / Fim de Semana</span>
+                </label>
+              </div>
+
+              <div class="field full" id="newBlockReasonWrap" style="display: none;">
+                <label for="newMotivoBloqueio" style="color: var(--orange);">⚠️ Motivo do Bloqueio / Aguardando Terceiros (Blindagem do Técnico)</label>
+                <input type="text" id="newMotivoBloqueio" name="motivo_bloqueio" placeholder="Ex.: Aguardando peça nova pelo Almoxarifado / Chamado aberto no suporte MV...">
               </div>
 
               <div class="field full">
@@ -531,6 +602,20 @@
                 </div>
               </div>
             </button>
+
+            <button type="button" class="model-option-card" id="tabReportDashboardBtn" onclick="switchReportModel('dashboard')">
+              <div class="model-card-top">
+                <span class="model-card-badge" style="background: rgba(0, 242, 254, 0.15); color: #00f2fe; border: 1px solid rgba(0, 242, 254, 0.4);">Modelo 3 — Executivo</span>
+                <span class="model-check-circle">✓</span>
+              </div>
+              <div class="model-card-content">
+                <div class="model-card-icon">⚡</div>
+                <div class="model-card-text">
+                  <h4>Modelo 3: Relatório Executivo Dashboard & Telemetria</h4>
+                  <p>Documento executivo visual para a Diretoria com cards gráficos de telemetria, taxa de resolução, ranking de setores mais demandantes com parecer técnico, justificativa de pendências e carimbo digital.</p>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -624,7 +709,7 @@
 
           <!-- Painel de Configurações do Relatório de Produtividade (Salvo no Navegador) -->
           <div class="card prod-control-panel" style="margin-bottom: 24px; padding: 20px;">
-            <div style="font-weight: 700; font-size: 14px; margin-bottom: 14px; color: var(--blue); display: flex; align-items: center; gap: 8px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 14px; color: var(--cyan); display: flex; align-items: center; gap: 8px;">
               <span>⚙</span> Parâmetros de Emissão e Identificação (salvos automaticamente no navegador)
             </div>
 
@@ -718,8 +803,8 @@
               </div>
             </div>
 
-            <div style="margin-top: 12px; font-size: 12.5px; color: var(--ink-light); background: #f0f7ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #cce3fd;">
-              💡 <strong>Edição em tempo real habilitada:</strong> Todos os textos, indicadores numéricos, tabelas e itens nas 5 páginas abaixo são editáveis. Clique e altere diretamente qualquer trecho antes de salvar ou imprimir!
+            <div style="margin-top: 12px; font-size: 12.5px; color: #e2e8f0; background: rgba(0, 242, 254, 0.08); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(0, 242, 254, 0.28);">
+              💡 <strong style="color: var(--cyan);">Edição em tempo real habilitada:</strong> Todos os textos, indicadores numéricos, tabelas e itens nas 5 páginas abaixo são editáveis. Clique e altere diretamente qualquer trecho antes de salvar ou imprimir!
             </div>
           </div>
 
@@ -1115,6 +1200,176 @@
             </div>
           </div>
         </div>
+
+        <!-- ========================================================== -->
+        <!-- MODELO 3: RELATÓRIO EXECUTIVO DASHBOARD & TELEMETRIA -->
+        <!-- ========================================================== -->
+        <div id="reportModelDashboardContainer" style="display: none;">
+          <div class="title-row">
+            <div>
+              <div class="eyebrow" style="color: var(--cyan);">Visão Executiva de Alto Impacto</div>
+              <h2>Relatório Executivo de Telemetria e Produtividade</h2>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <div class="period-control">
+                <label>Período:</label>
+                <select id="execReportMonthSelect" onchange="syncExecReportPeriod()"></select>
+                <select id="execReportYearSelect" onchange="syncExecReportPeriod()"></select>
+              </div>
+              <button class="btn btn-primary" onclick="window.print()">
+                🖶 Imprimir Relatório Executivo / Salvar PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Folha do Relatório Executivo -->
+          <div class="executive-report-container" id="execReportSheet">
+            <div class="exec-header">
+              <div class="exec-header-left">
+                <img id="execReportLogo" class="exec-logo" src="/uploads/logo.png" alt="Logotipo Institucional" onerror="this.style.display='none'">
+                <div class="exec-header-text">
+                  <h2 id="execHospitalTitle">Hospital Regional Nossa Senhora do Bom Conselho</h2>
+                  <p id="execSectorSubtitle">Núcleo de Tecnologia da Informação — Relatório Executivo de Telemetria</p>
+                </div>
+              </div>
+              <div style="text-align: right; font-family: var(--font-mono); font-size: 11px; color: #64748b;">
+                <div>STATUS: <strong>CONSOLIDADO</strong></div>
+                <div>AUTENTICAÇÃO: <strong id="execAuthHash">TI-HR-2026-X892</strong></div>
+              </div>
+            </div>
+
+            <!-- Metadados da Emissão -->
+            <div class="exec-meta-grid">
+              <div class="exec-meta-item">
+                <strong>Período Avaliado</strong>
+                <span id="execPeriodText">Setembro de 2026</span>
+              </div>
+              <div class="exec-meta-item">
+                <strong>Responsável Técnico</strong>
+                <span id="execResponsibleText">Nome do Colaborador</span>
+              </div>
+              <div class="exec-meta-item">
+                <strong>Setor de Atuação</strong>
+                <span id="execSectorText">Tecnologia da Informação</span>
+              </div>
+              <div class="exec-meta-item">
+                <strong>Data de Emissão</strong>
+                <span id="execIssueDate">26/10/2026</span>
+              </div>
+            </div>
+
+            <!-- Resumo Executivo Narrativo Formal -->
+            <div class="exec-summary-box">
+              <h3>
+                <span>1. Resumo Executivo & Sustentação Operacional</span>
+                <button type="button" class="btn btn-light btn-sm" onclick="recalcNarrativeSummary()" style="font-size: 11px; padding: 2px 8px;">↻ Regerar Texto</button>
+              </h3>
+              <p id="execNarrativeText" contenteditable="true">Carregando resumo narrativo...</p>
+            </div>
+
+            <!-- Cards Gráficos de Telemetria Executiva (4 KPIs) -->
+            <div class="exec-kpi-cards">
+              <div class="exec-kpi-card blue">
+                <div class="exec-kpi-label">Volume Total</div>
+                <div class="exec-kpi-val" id="execKpiTotal">0</div>
+                <div class="exec-kpi-sub" id="execKpiTotalSub">Atendimentos no mês</div>
+              </div>
+              <div class="exec-kpi-card green">
+                <div class="exec-kpi-label">Índice Resolutivo</div>
+                <div class="exec-kpi-val" id="execKpiTaxa">0%</div>
+                <div class="exec-kpi-sub" id="execKpiTaxaSub">0 chamados sanados</div>
+              </div>
+              <div class="exec-kpi-card purple">
+                <div class="exec-kpi-label">Sobreaviso & Plantão</div>
+                <div class="exec-kpi-val" id="execKpiSobreaviso">0</div>
+                <div class="exec-kpi-sub">Finais de semana / Noturno</div>
+              </div>
+              <div class="exec-kpi-card red">
+                <div class="exec-kpi-label">Alta Criticidade</div>
+                <div class="exec-kpi-val" id="execKpiCriticos">0</div>
+                <div class="exec-kpi-sub">Urgentes / Emergenciais</div>
+              </div>
+            </div>
+
+            <!-- Grids de Análise: Ranking de Setores Críticos e Distribuição por Tipo -->
+            <div class="exec-grid-2">
+              <div class="exec-block">
+                <div class="exec-block-title">
+                  <span>🏢 Top Setores Mais Demandantes</span>
+                  <span style="font-size: 11px; color: #64748b;">Volume e Criticidade</span>
+                </div>
+                <div id="execTopSectorsList">
+                  <div class="empty" style="color: #64748b;">Carregando setores...</div>
+                </div>
+              </div>
+
+              <div class="exec-block">
+                <div class="exec-block-title">
+                  <span>⚙️ Distribuição por Segmento Técnico</span>
+                  <span style="font-size: 11px; color: #64748b;">Frentes de Atuação</span>
+                </div>
+                <div id="execTopTypesList">
+                  <div class="empty" style="color: #64748b;">Carregando segmentos...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Destaques e Grandes Entregas do Mês -->
+            <div class="exec-block" style="margin-bottom: 24px;">
+              <div class="exec-block-title">
+                <span>🌟 Grandes Entregas & Ações Estratégicas do Mês</span>
+                <span style="font-size: 11px; color: #64748b;">Clique para editar os tópicos</span>
+              </div>
+              <ul id="execHighlightsList" style="margin-left: 20px; line-height: 1.8; font-size: 13px;" contenteditable="true">
+                <li>Sustentação contínua da infraestrutura de estações de trabalho e sistemas hospitalares vitais;</li>
+                <li>Atendimento prioritário em setores de terapia intensiva (UTI) e Pronto Atendimento sem paradas críticas;</li>
+                <li>Pronto atendimento a demandas extraordinárias em plantões de sobreaviso e finais de semana;</li>
+                <li>Monitoramento e manutenções preventivas nos pontos críticos da rede lógica hospitalar.</li>
+              </ul>
+            </div>
+
+            <!-- Mapeamento de Pendências com Justificativa (Blindagem do Técnico) -->
+            <div class="exec-block" style="margin-bottom: 24px;">
+              <div class="exec-block-title">
+                <span>⚠️ Demandas Não Concluídas & Justificativa de Bloqueio</span>
+                <span style="font-size: 11px; color: #b45309; font-weight: 600;">Dependências Externas Mapeadas</span>
+              </div>
+              <div id="execBlockedList">
+                <div style="font-size: 12.5px; color: #15803d; font-weight: 600; padding: 6px 0;">
+                  ✓ Todas as ocorrências registradas no período foram solucionadas com êxito!
+                </div>
+              </div>
+            </div>
+
+            <!-- Parecer Técnico e Recomendações para a Diretoria -->
+            <div class="exec-block" style="margin-bottom: 24px;">
+              <div class="exec-block-title">
+                <span>💡 Parecer Técnico e Recomendações para a Gestão</span>
+                <span style="font-size: 11px; color: #64748b;">Próximos Passos & Planejamento</span>
+              </div>
+              <p id="execRecomendacoesText" contenteditable="true" style="font-size: 12.5px; color: #334155; line-height: 1.6;">
+                Recomenda-se a continuidade do plano de renovação de periféricos nos setores de atendimento direto ao público (PA e Recepção), bem como o fortalecimento do estoque de sobressalentes (mouses, cabos e fontes) junto ao almoxarifado para reduzir ainda mais o tempo de espera nas trocas emergenciais.
+              </p>
+            </div>
+
+            <!-- Assinatura e Carimbo de Autenticidade Digital -->
+            <div class="exec-signature-row">
+              <div class="exec-sig-box">
+                <strong id="execSigTechName">Responsável Técnico</strong>
+                <span id="execSigTechSector" style="color: #64748b;">Tecnologia da Informação</span>
+              </div>
+              <div class="exec-sig-box">
+                <strong>Coordenação / Diretoria Hospitalar</strong>
+                <span style="color: #64748b;">Visto de Ciência e Homologação</span>
+              </div>
+            </div>
+
+            <div class="exec-auth-stamp">
+              <span>SISTEMA DE GESTÃO DE OCORRÊNCIAS TI — RELATÓRIO EXECUTIVO OFICIAL</span>
+              <span id="execStampHash">HASH: TI-HR-2026-X892-OK</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ============================================== -->
@@ -1169,7 +1424,7 @@
             <form id="logoUploadForm">
               <div class="logo-upload-box" onclick="document.getElementById('logoFileInput').click()">
                 <div style="font-size: 28px; margin-bottom: 6px;">📷</div>
-                <strong style="font-size: 13px; color: var(--blue);">Clique para selecionar uma imagem</strong>
+                <strong style="font-size: 13px; color: var(--cyan);">Clique para selecionar uma imagem</strong>
                 <p style="font-size: 11.5px; color: var(--muted); margin-top: 4px;">PNG, JPG, WEBP ou SVG (máx. 5MB)</p>
                 <input type="file" id="logoFileInput" accept="image/*" style="display: none;">
               </div>
@@ -1194,7 +1449,7 @@
               <button type="button" class="btn btn-primary" id="btnDownloadBackup">
                 ⬇ Baixar Cópia de Segurança (.sqlite)
               </button>
-              <span style="font-size: 12px; color: var(--green-dark); font-weight: 600;">
+              <span style="font-size: 12px; color: var(--green); font-weight: 600;">
                 ✓ Cópia consistente e pronta para restauração imediata
               </span>
             </div>
@@ -1248,6 +1503,32 @@
               <button type="submit" class="btn btn-primary">Salvar nova senha</button>
             </form>
           </div>
+
+          <!-- Solução 3: Limpeza de Histórico Antigo com Backup Automático -->
+          <div class="card purge-control-box" style="grid-column: 1 / -1; margin-top: 10px;">
+            <div class="purge-title">
+              <span>🧹</span>
+              <span>Limpeza de Histórico Antigo (Expurgo Seguro com Backup Automático)</span>
+            </div>
+            <p class="purge-desc">
+              Mantenha o banco de dados leve e rápido liberando espaço de meses antigos.
+              Ao clicar para expurgar, o sistema <strong>baixa automaticamente uma planilha Excel (.xlsx) de backup completa</strong> para o seu computador com todos os registros removidos antes de apagá-los. Assim, seu histórico nunca é perdido!
+            </p>
+            <div class="purge-actions">
+              <label for="expurgoDiasSelect" style="font-size: 13px; font-weight: 600; color: var(--ink-light);">
+                Apagar ocorrências anteriores a:
+              </label>
+              <select id="expurgoDiasSelect" style="padding: 8px 12px; width: 180px;">
+                <option value="60">60 dias atrás</option>
+                <option value="90" selected>90 dias atrás (Recomendado)</option>
+                <option value="180">180 dias atrás (6 meses)</option>
+                <option value="365">365 dias atrás (1 ano)</option>
+              </select>
+              <button type="button" class="btn btn-danger" id="btnExecutarExpurgo" onclick="executarExpurgoSeguro()">
+                🧹 Expurgar e Baixar Backup Excel
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1296,11 +1577,21 @@
         </div>
         <div class="field">
           <label for="editStatus">Status *</label>
-          <select id="editStatus" required>
+          <select id="editStatus" required onchange="toggleBlockReasonField(this.value, 'editBlockReasonWrap')">
             <option value="Aberto">Aberto</option>
             <option value="Em andamento">Em andamento</option>
             <option value="Resolvido">Resolvido</option>
           </select>
+        </div>
+        <div class="field" style="display: flex; align-items: flex-end;">
+          <label class="sobreaviso-checkbox-wrap" style="width: 100%;">
+            <input type="checkbox" id="editSobreaviso" name="em_sobreaviso" value="1">
+            <span>🌙 Sobreaviso / Fim de Semana</span>
+          </label>
+        </div>
+        <div class="field full" id="editBlockReasonWrap" style="display: none;">
+          <label for="editMotivoBloqueio" style="color: var(--orange);">⚠️ Motivo do Bloqueio / Aguardando Terceiros (Blindagem)</label>
+          <input type="text" id="editMotivoBloqueio" placeholder="Ex.: Aguardando chegada de fonte nova, suporte MV...">
         </div>
         <div class="field full">
           <label for="editProblema">Descrição do problema *</label>
@@ -1329,7 +1620,7 @@
 <div class="modal-backdrop" id="modalDelete">
   <div class="modal" style="max-width: 440px; text-align: center;">
     <div style="font-size: 36px; color: var(--danger); margin-bottom: 12px;">⚠</div>
-    <h3 style="font-size: 18px; margin-bottom: 10px; color: var(--ink);">Confirmar exclusão</h3>
+    <h3 style="font-size: 18px; margin-bottom: 10px; color: #ffffff;">Confirmar exclusão</h3>
     <p style="font-size: 13.5px; color: var(--muted); margin-bottom: 24px;">
       Tem certeza de que deseja excluir permanentemente esta ocorrência? Esta ação não poderá ser desfeita.
     </p>
@@ -1346,7 +1637,7 @@
 <div class="modal-backdrop" id="modalSavedReports">
   <div class="modal" style="max-width: 680px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0; font-size: 18px; color: var(--ink);">📜 Relatórios Salvos no Histórico</h3>
+      <h3 style="margin: 0; font-size: 18px; color: var(--cyan);">📜 Relatórios Salvos no Histórico</h3>
       <button type="button" class="btn btn-light" style="padding: 4px 10px;" onclick="closeSavedReportsModal()">✕ Fechar</button>
     </div>
     <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">

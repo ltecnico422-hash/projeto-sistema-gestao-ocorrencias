@@ -12,12 +12,18 @@ const updates = [
   { email: 'pwa.excel.1789999729428@hospital.com', pass: '123456' }
 ];
 
-const stmt = db.prepare('UPDATE usuarios SET senha_hash = ? WHERE email = ?');
-for (const u of updates) {
-  const hash = hashPassword(u.pass);
-  stmt.run(hash, u.email);
+async function main() {
+  if (db.initPromise) await db.initPromise;
+
+  const stmt = db.prepare('UPDATE usuarios SET senha_hash = ? WHERE email = ?');
+  for (const u of updates) {
+    const hash = hashPassword(u.pass);
+    await stmt.run(hash, u.email);
+  }
+
+  console.log('--- Usuários e Senhas Gravadas no Banco ---');
+  const users = await db.prepare('SELECT id, nome, email, senha_hash FROM usuarios').all();
+  console.table(users);
 }
 
-console.log('--- Usuários e Senhas Gravadas no Banco ---');
-const users = db.prepare('SELECT id, nome, email, senha_hash FROM usuarios').all();
-console.table(users);
+main().catch(err => console.error(err));

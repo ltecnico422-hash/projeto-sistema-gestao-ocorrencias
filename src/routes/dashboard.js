@@ -56,6 +56,40 @@ router.get('/', async (req, res) => {
     `).get(usuarioId, ano, mes);
     const altaPrioridade = altaPrioridadeRow ? Number(altaPrioridadeRow.count) : 0;
 
+    // Atendimentos em Sobreaviso / Fim de semana
+    let sobreaviso = 0;
+    try {
+      const sobreavisoRow = await db.prepare(`
+        SELECT COUNT(*) as count FROM ocorrencias
+        WHERE usuario_id = ? AND em_sobreaviso = 1
+          AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+      `).get(usuarioId, ano, mes);
+      sobreaviso = sobreavisoRow ? Number(sobreavisoRow.count) : 0;
+    } catch (e) {
+      sobreaviso = 0;
+    }
+
+    // Comparativo com o mês anterior para cálculo de variação
+    const mesNum = parseInt(mes, 10);
+    const anoNum = parseInt(ano, 10);
+    const antMesNum = mesNum === 1 ? 12 : mesNum - 1;
+    const antAnoNum = mesNum === 1 ? anoNum - 1 : anoNum;
+    const antMes = String(antMesNum).padStart(2, '0');
+    const antAno = String(antAnoNum);
+
+    const antTotalRow = await db.prepare(`
+      SELECT COUNT(*) as count FROM ocorrencias
+      WHERE usuario_id = ?
+        AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+    `).get(usuarioId, antAno, antMes);
+    const totalMesAnterior = antTotalRow ? Number(antTotalRow.count) : 0;
+    let variacaoPct = 0;
+    if (totalMesAnterior > 0) {
+      variacaoPct = Math.round(((total - totalMesAnterior) / totalMesAnterior) * 100);
+    } else if (total > 0) {
+      variacaoPct = 100;
+    }
+
     // Percentuais de status
     const resolvidasPct = total > 0 ? Math.round((resolvidas / total) * 100) : 0;
     const emAndamentoPct = total > 0 ? Math.round((emAndamento / total) * 100) : 0;
@@ -63,12 +97,23 @@ router.get('/', async (req, res) => {
 
     // Últimas ocorrências registradas pelo usuário no período
     const atividadesRecentes = await db.prepare(`
-      SELECT id, data, setor, tipo_problema, problema, status, prioridade
+      SELECT id, data, setor, tipo_problema, problema, status, prioridade, em_sobreaviso, motivo_bloqueio
       FROM ocorrencias
       WHERE usuario_id = ?
         AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
       ORDER BY data DESC, id DESC
-      LIMIT 5
+      LIMIT 6
+    `).all(usuarioId, ano, mes);
+
+    // Ocorrências pendentes com motivo de bloqueio (Blindagem do técnico)
+    const bloqueiosPendentes = await db.prepare(`
+      SELECT id, data, setor, problema, motivo_bloqueio, status, prioridade
+      FROM ocorrencias
+      WHERE usuario_id = ?
+        AND status IN ('Em andamento', 'Aberto')
+        AND strftime('%Y', data) = ? AND strftime('%m', data) = ?
+      ORDER BY prioridade DESC, id DESC
+      LIMIT 8
     `).all(usuarioId, ano, mes);
 
     // Distribuição por Setor no período
@@ -115,7 +160,11 @@ router.get('/', async (req, res) => {
         resolvidas,
         em_andamento: emAndamento,
         abertas,
-        alta_prioridade: altaPrioridade
+        alta_prioridade: altaPrioridade,
+        sobreaviso,
+        taxa_resolucao: resolvidasPct,
+        total_mes_anterior: totalMesAnterior,
+        variacao_pct: variacaoPct
       },
       percentuais: {
         resolvidas_pct: resolvidasPct,
@@ -125,6 +174,7 @@ router.get('/', async (req, res) => {
       por_setor: porSetor,
       por_tipo: porTipo,
       por_prioridade: porPrioridade,
+      bloqueios_pendentes: bloqueiosPendentes,
       atividades_recentes: atividadesRecentes
     });
   } catch (error) {

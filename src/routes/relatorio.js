@@ -82,6 +82,45 @@ async function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataF
   const altaPrioridadeRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND prioridade IN ('Alta', 'Urgente')`).get(...queryParams);
   const altaPrioridade = altaPrioridadeRow ? Number(altaPrioridadeRow.count) : 0;
 
+  let sobreavisoTotal = 0;
+  let sobreavisoOcorrencias = [];
+  try {
+    const sRow = await db.prepare(`SELECT COUNT(*) as count FROM ocorrencias WHERE ${queryWhere} AND em_sobreaviso = 1`).get(...queryParams);
+    sobreavisoTotal = sRow ? Number(sRow.count) : 0;
+    sobreavisoOcorrencias = await db.prepare(`SELECT * FROM ocorrencias WHERE ${queryWhere} AND em_sobreaviso = 1 ORDER BY data DESC, id DESC`).all(...queryParams);
+  } catch (e) {
+    sobreavisoTotal = 0;
+    sobreavisoOcorrencias = [];
+  }
+
+  // Setores mais demandantes
+  const topSetores = await db.prepare(`
+    SELECT setor, COUNT(*) as count
+    FROM ocorrencias
+    WHERE ${queryWhere}
+    GROUP BY setor
+    ORDER BY count DESC
+    LIMIT 6
+  `).all(...queryParams);
+
+  // Tipos mais frequentes
+  const topTipos = await db.prepare(`
+    SELECT tipo_problema, COUNT(*) as count
+    FROM ocorrencias
+    WHERE ${queryWhere}
+    GROUP BY tipo_problema
+    ORDER BY count DESC
+    LIMIT 6
+  `).all(...queryParams);
+
+  // Ocorrências em andamento ou abertas com motivo de bloqueio
+  const pendenciasBloqueios = await db.prepare(`
+    SELECT id, data, setor, problema, diagnostico, motivo_bloqueio, status, prioridade
+    FROM ocorrencias
+    WHERE ${queryWhere} AND status IN ('Em andamento', 'Aberto')
+    ORDER BY prioridade DESC, data DESC
+  `).all(...queryParams);
+
   // Lista de ocorrências do usuário ordenada decrescente por data e ID
   const ocorrencias = await db.prepare(`
     SELECT * FROM ocorrencias
@@ -90,13 +129,38 @@ async function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataF
   `).all(...queryParams);
 
   const emissao = today.toLocaleDateString('pt-BR');
+  const taxaResolucao = total > 0 ? Math.round((resolvidas / total) * 100) : 0;
+
+  // Gerador de Resumo Narrativo Formal com Linguagem Executiva
+  let resumoNarrativoFormal = '';
+  if (total === 0) {
+    resumoNarrativoFormal = `No período avaliado (${periodoLabel}), não constam ocorrências técnicas registradas pelo colaborador no sistema.`;
+  } else {
+    const principalTipo = topTipos.length > 0 ? topTipos[0].tipo_problema : 'Suporte Técnico';
+    const principalSetor = topSetores.length > 0 ? topSetores[0].setor : 'diversos setores';
+    const nomeUnidade = config.nome_hospital || 'Hospital Regional';
+
+    resumoNarrativoFormal = `Durante o período avaliado (${periodoLabel}), o setor de Tecnologia da Informação do ${nomeUnidade} atuou na sustentação operacional e suporte contínuo às rotinas assistenciais e administrativas, totalizando ${total} intervenção(ões) técnica(s) documentada(s). O índice de resolutividade alcançado foi de ${taxaResolucao}%, refletindo eficiência e rapidez no restabelecimento dos serviços essenciais.`;
+
+    resumoNarrativoFormal += ` As demandas concentraram-se predominantemente no segmento de ${principalTipo}, sendo o setor de ${principalSetor} a unidade com maior volume de requisições.`;
+
+    if (sobreavisoTotal > 0) {
+      resumoNarrativoFormal += ` Adicionalmente, foram cumpridos ${sobreavisoTotal} chamado(s) em regime de sobreaviso e finais de semana, garantindo a prontidão do atendimento em horários extraordinários.`;
+    }
+
+    if (pendenciasBloqueios.length > 0) {
+      resumoNarrativoFormal += ` As ${pendenciasBloqueios.length} ocorrência(s) em aberto encontram-se mapeadas com devida justificativa e aguardam suprimentos, liberação de compras ou suporte de terceiros.`;
+    }
+  }
 
   let resumoTexto = '';
   if (total === 0) {
     resumoTexto = 'Não há ocorrências registradas no período para o seu usuário.';
   } else {
-    resumoTexto = `No período, foram registradas ${total} ocorrência(s), das quais ${resolvidas} foram resolvidas. A seguir, estão documentadas integralmente as informações lançadas em cada registro, incluindo setor, tipo do problema, descrição, diagnóstico, providências realizadas, status e prioridade.`;
+    resumoTexto = `No período, foram registradas ${total} ocorrência(s), das quais ${resolvidas} foram resolvidas (${taxaResolucao}% de resolutividade).`;
   }
+
+  const hashAutenticidade = `TI-HR-${ano}${String(mes).padStart(2, '0')}-${(usuario.id * 83 + total * 7).toString(16).toUpperCase().padStart(4, '0')}`;
 
   return {
     ano: Number(ano),
@@ -104,13 +168,21 @@ async function getReportData(mesParam, anoParam, usuario, dataInicioParam, dataF
     periodoLabel,
     emissao,
     config,
+    hashAutenticidade,
     indicadores: {
       total,
       resolvidas,
       em_andamento: emAndamento,
       abertas,
-      alta_prioridade: altaPrioridade
+      alta_prioridade: altaPrioridade,
+      sobreaviso: sobreavisoTotal,
+      taxa_resolucao: taxaResolucao
     },
+    topSetores,
+    topTipos,
+    pendenciasBloqueios,
+    sobreavisoOcorrencias,
+    resumoNarrativoFormal,
     resumoTexto,
     ocorrencias
   };

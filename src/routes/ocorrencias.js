@@ -91,7 +91,9 @@ router.post('/', async (req, res) => {
       diagnostico,
       o_que_foi_feito,
       status = 'Aberto',
-      prioridade = 'Normal'
+      prioridade = 'Normal',
+      em_sobreaviso = false,
+      motivo_bloqueio = ''
     } = req.body;
 
     const usuarioId = req.usuario.id;
@@ -101,11 +103,13 @@ router.post('/', async (req, res) => {
     }
 
     const finalData = data ? String(data).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const sobreavisoVal = em_sobreaviso ? 1 : 0;
+    const bloqueioVal = motivo_bloqueio ? String(motivo_bloqueio).trim() : null;
 
     const insertStmt = db.prepare(`
       INSERT INTO ocorrencias (
-        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade, em_sobreaviso, motivo_bloqueio
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = await insertStmt.run(
@@ -117,7 +121,9 @@ router.post('/', async (req, res) => {
       diagnostico ? diagnostico.trim() : '',
       o_que_foi_feito ? o_que_foi_feito.trim() : '',
       status,
-      prioridade
+      prioridade,
+      sobreavisoVal,
+      bloqueioVal
     );
 
     const novaOcorrencia = await db.prepare('SELECT * FROM ocorrencias WHERE id = ?').get(result.lastInsertRowid);
@@ -140,13 +146,18 @@ router.put('/:id', async (req, res) => {
       diagnostico,
       o_que_foi_feito,
       status,
-      prioridade
+      prioridade,
+      em_sobreaviso,
+      motivo_bloqueio
     } = req.body;
 
     const existing = await db.prepare('SELECT * FROM ocorrencias WHERE id = ? AND usuario_id = ?').get(id, usuarioId);
     if (!existing) {
       return res.status(404).json({ erro: 'Ocorrência não encontrada ou você não tem permissão para alterá-la.' });
     }
+
+    const sobreavisoVal = em_sobreaviso !== undefined ? (em_sobreaviso ? 1 : 0) : existing.em_sobreaviso;
+    const bloqueioVal = motivo_bloqueio !== undefined ? (motivo_bloqueio ? String(motivo_bloqueio).trim() : null) : existing.motivo_bloqueio;
 
     await db.prepare(`
       UPDATE ocorrencias
@@ -158,6 +169,8 @@ router.put('/:id', async (req, res) => {
           o_que_foi_feito = COALESCE(?, o_que_foi_feito),
           status = COALESCE(?, status),
           prioridade = COALESCE(?, prioridade),
+          em_sobreaviso = ?,
+          motivo_bloqueio = ?,
           atualizado_em = datetime('now', 'localtime')
       WHERE id = ? AND usuario_id = ?
     `).run(
@@ -169,6 +182,8 @@ router.put('/:id', async (req, res) => {
       o_que_foi_feito ?? null,
       status ?? null,
       prioridade ?? null,
+      sobreavisoVal,
+      bloqueioVal,
       id,
       usuarioId
     );
@@ -217,8 +232,8 @@ router.post('/sincronizar', async (req, res) => {
 
     const insertStmt = db.prepare(`
       INSERT INTO ocorrencias (
-        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade, em_sobreaviso, motivo_bloqueio
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let restauradas = 0;
@@ -239,7 +254,9 @@ router.post('/sincronizar', async (req, res) => {
           item.diagnostico ? String(item.diagnostico).trim() : '',
           item.o_que_foi_feito ? String(item.o_que_foi_feito).trim() : '',
           item.status || 'Aberto',
-          item.prioridade || 'Normal'
+          item.prioridade || 'Normal',
+          item.em_sobreaviso ? 1 : 0,
+          item.motivo_bloqueio ? String(item.motivo_bloqueio).trim() : null
         );
         restauradas++;
       }

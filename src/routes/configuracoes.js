@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('node:path');
 const fs = require('node:fs');
+const ExcelJS = require('exceljs');
 const db = require('../database/db');
 const authMiddleware = require('../middleware/auth');
 
@@ -269,6 +270,90 @@ router.post('/restaurar-json', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao restaurar backup JSON.', detalhes: error.message });
+  }
+});
+
+// POST /api/configuracoes/expurgar - Limpa ocorrências anteriores a X dias com geração prévia de backup XLSX (Solução 3)
+router.post('/expurgar', async (req, res) => {
+  try {
+    const usuarioId = req.usuario.id;
+    const dias = parseInt(req.body.dias, 10);
+    if (!dias || dias < 30) {
+      return res.status(400).json({ erro: 'Informe um período de dias válido (mínimo 30 dias).' });
+    }
+
+    const cutoffDate = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+
+    const ocorrenciasAntigas = await db.prepare(`
+      SELECT * FROM ocorrencias
+      WHERE usuario_id = ? AND data < ?
+      ORDER BY data ASC, id ASC
+    `).all(usuarioId, cutoffStr);
+
+    if (ocorrenciasAntigas.length === 0) {
+      return res.json({
+        totalRemovidos: 0,
+        mensagem: `Nenhuma ocorrência anterior a ${cutoffStr.split('-').reverse().join('/')} encontrada para expurgo.`
+      });
+    }
+
+    // Gera arquivo Excel com os registros a serem removidos
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'TI Hospital Regional';
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet(`Backup Expurgo - ${dias}d`);
+
+    sheet.columns = [
+      { header: 'ID', key: 'id', width: 8 },
+      { header: 'Data', key: 'data', width: 14 },
+      { header: 'Setor', key: 'setor', width: 22 },
+      { header: 'Tipo', key: 'tipo_problema', width: 18 },
+      { header: 'Problema', key: 'problema', width: 35 },
+      { header: 'Diagnóstico', key: 'diagnostico', width: 30 },
+      { header: 'O que foi feito', key: 'o_que_foi_feito', width: 35 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Prioridade', key: 'prioridade', width: 14 },
+      { header: 'Sobreaviso', key: 'em_sobreaviso', width: 12 },
+      { header: 'Motivo Bloqueio', key: 'motivo_bloqueio', width: 25 }
+    ];
+
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF07356F' } };
+
+    for (const oc of ocorrenciasAntigas) {
+      sheet.addRow({
+        id: oc.id,
+        data: oc.data,
+        setor: oc.setor,
+        tipo_problema: oc.tipo_problema,
+        problema: oc.problema,
+        diagnostico: oc.diagnostico || '',
+        o_que_foi_feito: oc.o_que_foi_feito || '',
+        status: oc.status,
+        prioridade: oc.prioridade,
+        em_sobreaviso: oc.em_sobreaviso ? 'SIM' : 'NÃO',
+        motivo_bloqueio: oc.motivo_bloqueio || ''
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const base64Data = buffer.toString('base64');
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const filename = `backup_seguranca_expurgo_${dias}dias_${todayStr}.xlsx`;
+
+    // Remove do banco de forma segura
+    await db.prepare('DELETE FROM ocorrencias WHERE usuario_id = ? AND data < ?').run(usuarioId, cutoffStr);
+
+    res.json({
+      totalRemovidos: ocorrenciasAntigas.length,
+      mensagem: `${ocorrenciasAntigas.length} ocorrência(s) anterior(es) a ${cutoffStr.split('-').reverse().join('/')} expurgada(s) com sucesso!`,
+      arquivoBase64: base64Data,
+      nomeArquivo: filename,
+      dataCorte: cutoffStr
+    });
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao expurgar ocorrências.', detalhes: error.message });
   }
 });
 

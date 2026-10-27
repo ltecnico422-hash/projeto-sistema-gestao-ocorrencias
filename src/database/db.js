@@ -237,6 +237,9 @@ if (rawDatabaseUrl && rawDatabaseUrl.trim()) {
         INSERT INTO configuracoes (id, nome_hospital, setor, nome_responsavel, logo_path)
         VALUES (1, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', '', 'uploads/logo.png')
         ON CONFLICT (id) DO NOTHING;
+
+        ALTER TABLE ocorrencias ADD COLUMN IF NOT EXISTS em_sobreaviso BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE ocorrencias ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
       `);
       console.log('✓ [Supabase] Tabelas e funções verificadas com sucesso!');
     } catch (errInit) {
@@ -293,8 +296,9 @@ if (rawDatabaseUrl && rawDatabaseUrl.trim()) {
 } else {
   // ==========================================
   // MODO SQLITE LOCAL (DESENVOLVIMENTO OFFLINE)
+  // Compatível com Node 20+ e Node 22+
   // ==========================================
-  const { DatabaseSync } = require('node:sqlite');
+  const sqlite3 = require('sqlite3').verbose();
   console.log('[Banco de Dados] Modo SQLite local ativado (DATABASE_URL não configurada).');
 
   const dataDir = process.env.DATA_DIR || path.join(__dirname, '../../data');
@@ -303,121 +307,173 @@ if (rawDatabaseUrl && rawDatabaseUrl.trim()) {
   }
 
   const dbPath = path.join(dataDir, 'database.sqlite');
-  const sqliteDb = new DatabaseSync(dbPath);
+  const sqliteDb = new sqlite3.Database(dbPath);
 
-  sqliteDb.exec(`PRAGMA journal_mode = WAL;`);
-  sqliteDb.exec(`PRAGMA foreign_keys = ON;`);
+  const initSqlitePromise = new Promise((resolve, reject) => {
+    sqliteDb.serialize(() => {
+      sqliteDb.run('PRAGMA journal_mode = WAL;');
+      sqliteDb.run('PRAGMA foreign_keys = ON;');
 
-  sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      senha_hash TEXT NOT NULL,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+      sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS usuarios (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nome TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          senha_hash TEXT NOT NULL,
+          criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE TABLE IF NOT EXISTS configuracoes_usuario (
-      usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-      nome_hospital TEXT NOT NULL DEFAULT 'Hospital Regional Nossa Senhora do Bom Conselho',
-      setor TEXT NOT NULL DEFAULT 'Tecnologia da Informação',
-      nome_responsavel TEXT DEFAULT '',
-      logo_path TEXT DEFAULT 'uploads/logo.png',
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+        CREATE TABLE IF NOT EXISTS configuracoes_usuario (
+          usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+          nome_hospital TEXT NOT NULL DEFAULT 'Hospital Regional Nossa Senhora do Bom Conselho',
+          setor TEXT NOT NULL DEFAULT 'Tecnologia da Informação',
+          nome_responsavel TEXT DEFAULT '',
+          logo_path TEXT DEFAULT 'uploads/logo.png',
+          atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE TABLE IF NOT EXISTS ocorrencias (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-      data TEXT NOT NULL,
-      setor TEXT NOT NULL,
-      tipo_problema TEXT NOT NULL CHECK (tipo_problema IN ('Hardware', 'Software', 'Rede/Internet', 'Impressão', 'Acesso/Usuário', 'Outro')),
-      problema TEXT NOT NULL,
-      diagnostico TEXT,
-      o_que_foi_feito TEXT,
-      status TEXT NOT NULL DEFAULT 'Aberto' CHECK (status IN ('Aberto', 'Em andamento', 'Resolvido')),
-      prioridade TEXT NOT NULL DEFAULT 'Normal' CHECK (prioridade IN ('Normal', 'Alta', 'Urgente')),
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+        CREATE TABLE IF NOT EXISTS ocorrencias (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+          data TEXT NOT NULL,
+          setor TEXT NOT NULL,
+          tipo_problema TEXT NOT NULL CHECK (tipo_problema IN ('Hardware', 'Software', 'Rede/Internet', 'Impressão', 'Acesso/Usuário', 'Outro')),
+          problema TEXT NOT NULL,
+          diagnostico TEXT,
+          o_que_foi_feito TEXT,
+          status TEXT NOT NULL DEFAULT 'Aberto' CHECK (status IN ('Aberto', 'Em andamento', 'Resolvido')),
+          prioridade TEXT NOT NULL DEFAULT 'Normal' CHECK (prioridade IN ('Normal', 'Alta', 'Urgente')),
+          criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+          atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE TABLE IF NOT EXISTS configuracoes (
-      id INTEGER PRIMARY KEY,
-      nome_hospital TEXT NOT NULL DEFAULT 'Hospital Regional Nossa Senhora do Bom Conselho',
-      setor TEXT NOT NULL DEFAULT 'Tecnologia da Informação',
-      nome_responsavel TEXT DEFAULT '',
-      logo_path TEXT DEFAULT 'uploads/logo.png',
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+        CREATE TABLE IF NOT EXISTS configuracoes (
+          id INTEGER PRIMARY KEY,
+          nome_hospital TEXT NOT NULL DEFAULT 'Hospital Regional Nossa Senhora do Bom Conselho',
+          setor TEXT NOT NULL DEFAULT 'Tecnologia da Informação',
+          nome_responsavel TEXT DEFAULT '',
+          logo_path TEXT DEFAULT 'uploads/logo.png',
+          atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE TABLE IF NOT EXISTS relatorios_gerados (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
-      periodo_mes INTEGER NOT NULL,
-      periodo_ano INTEGER NOT NULL,
-      total_ocorrencias INTEGER NOT NULL,
-      resolvidas INTEGER NOT NULL,
-      em_andamento INTEGER NOT NULL,
-      abertas INTEGER NOT NULL,
-      alta_prioridade INTEGER NOT NULL,
-      responsavel TEXT,
-      formato TEXT CHECK (formato IN ('pdf', 'docx')),
-      gerado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+        CREATE TABLE IF NOT EXISTS relatorios_gerados (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+          periodo_mes INTEGER NOT NULL,
+          periodo_ano INTEGER NOT NULL,
+          total_ocorrencias INTEGER NOT NULL,
+          resolvidas INTEGER NOT NULL,
+          em_andamento INTEGER NOT NULL,
+          abertas INTEGER NOT NULL,
+          alta_prioridade INTEGER NOT NULL,
+          responsavel TEXT,
+          formato TEXT CHECK (formato IN ('pdf', 'docx')),
+          gerado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE TABLE IF NOT EXISTS relatorios_salvos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-      tipo TEXT NOT NULL DEFAULT 'produtividade',
-      titulo TEXT NOT NULL,
-      periodo_inicio TEXT,
-      periodo_fim TEXT,
-      dados_json TEXT NOT NULL,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
+        CREATE TABLE IF NOT EXISTS relatorios_salvos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+          tipo TEXT NOT NULL DEFAULT 'produtividade',
+          titulo TEXT NOT NULL,
+          periodo_inicio TEXT,
+          periodo_fim TEXT,
+          dados_json TEXT NOT NULL,
+          criado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+          atualizado_em TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
 
-    CREATE INDEX IF NOT EXISTS idx_ocorrencias_usuario ON ocorrencias (usuario_id);
-    CREATE INDEX IF NOT EXISTS idx_ocorrencias_data ON ocorrencias (data);
-    CREATE INDEX IF NOT EXISTS idx_ocorrencias_status ON ocorrencias (status);
-    CREATE INDEX IF NOT EXISTS idx_ocorrencias_prioridade ON ocorrencias (prioridade);
-    CREATE INDEX IF NOT EXISTS idx_relatorios_salvos_usuario ON relatorios_salvos (usuario_id);
-  `);
+        CREATE INDEX IF NOT EXISTS idx_ocorrencias_usuario ON ocorrencias (usuario_id);
+        CREATE INDEX IF NOT EXISTS idx_ocorrencias_data ON ocorrencias (data);
+        CREATE INDEX IF NOT EXISTS idx_ocorrencias_status ON ocorrencias (status);
+        CREATE INDEX IF NOT EXISTS idx_ocorrencias_prioridade ON ocorrencias (prioridade);
+        CREATE INDEX IF NOT EXISTS idx_relatorios_salvos_usuario ON relatorios_salvos (usuario_id);
 
-  const configExists = sqliteDb.prepare('SELECT id FROM configuracoes WHERE id = 1').get();
-  if (!configExists) {
-    sqliteDb.prepare(`
-      INSERT INTO configuracoes (id, nome_hospital, setor, nome_responsavel, logo_path)
-      VALUES (1, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', '', 'uploads/logo.png')
-    `).run();
-  }
+        INSERT INTO configuracoes (id, nome_hospital, setor, nome_responsavel, logo_path)
+        VALUES (1, 'Hospital Regional Nossa Senhora do Bom Conselho', 'Tecnologia da Informação', '', 'uploads/logo.png')
+        ON CONFLICT (id) DO NOTHING;
+      `, (err) => {
+        if (err) {
+          console.error('❌ [Banco de Dados] Erro ao inicializar tabelas SQLite:', err);
+          reject(err);
+        } else {
+          // Migração de colunas complementares no SQLite
+          sqliteDb.all("PRAGMA table_info(ocorrencias)", (errCols, cols) => {
+            if (!errCols && cols) {
+              const colNames = cols.map(c => c.name);
+              if (!colNames.includes('em_sobreaviso')) {
+                sqliteDb.run("ALTER TABLE ocorrencias ADD COLUMN em_sobreaviso INTEGER NOT NULL DEFAULT 0");
+              }
+              if (!colNames.includes('motivo_bloqueio')) {
+                sqliteDb.run("ALTER TABLE ocorrencias ADD COLUMN motivo_bloqueio TEXT");
+              }
+            }
+          });
+          console.log('✓ [Banco de Dados] Tabelas e índices SQLite verificados com sucesso!');
+          resolve();
+        }
+      });
+    });
+  });
 
   dbInstance = {
     isPg: false,
     sqliteDb,
+    initPromise: initSqlitePromise,
     prepare(sql) {
-      const stmt = sqliteDb.prepare(sql);
       return {
         async get(...params) {
+          await initSqlitePromise;
           const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          return stmt.get(...flatParams);
+          return new Promise((resolve, reject) => {
+            sqliteDb.get(sql, flatParams, (err, row) => {
+              if (err) return reject(err);
+              resolve(row || undefined);
+            });
+          });
         },
         async all(...params) {
+          await initSqlitePromise;
           const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          return stmt.all(...flatParams);
+          return new Promise((resolve, reject) => {
+            sqliteDb.all(sql, flatParams, (err, rows) => {
+              if (err) return reject(err);
+              resolve(rows || []);
+            });
+          });
         },
         async run(...params) {
+          await initSqlitePromise;
           const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
-          return stmt.run(...flatParams);
+          return new Promise((resolve, reject) => {
+            sqliteDb.run(sql, flatParams, function(err) {
+              if (err) return reject(err);
+              resolve({
+                changes: this.changes || 0,
+                lastInsertRowid: this.lastID !== undefined ? Number(this.lastID) : undefined
+              });
+            });
+          });
         }
       };
     },
     async exec(sql) {
-      return sqliteDb.exec(sql);
+      await initSqlitePromise;
+      return new Promise((resolve, reject) => {
+        sqliteDb.exec(sql, (err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
     },
     async query(sql, params = []) {
-      const stmt = sqliteDb.prepare(sql);
-      return stmt.all(...params);
+      await initSqlitePromise;
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(sql, params, (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        });
+      });
     }
   };
 }
