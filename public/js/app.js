@@ -2197,8 +2197,16 @@ async function handleRestoreJsonFile(event) {
 $('newIncidentForm').onsubmit = async (e) => {
   e.preventDefault();
   const form = e.target;
+  let setorVal = form.setor.value.trim();
+  if (!setorVal) {
+    const rndIdx = Math.floor(Math.random() * APP_HOSPITAL_SECTORS.length);
+    setorVal = APP_HOSPITAL_SECTORS[rndIdx];
+    form.setor.value = setorVal;
+    showToast(`🎲 Setor atribuído automaticamente: ${setorVal}`, 'info');
+  }
+
   const payload = {
-    setor: form.setor.value.trim(),
+    setor: setorVal,
     data: form.data.value,
     tipo_problema: form.tipo_problema.value,
     prioridade: form.prioridade.value,
@@ -2283,8 +2291,16 @@ function closeEditModal() {
 $('editForm').onsubmit = async (e) => {
   e.preventDefault();
   const id = $('editId').value;
+  let setorEditVal = $('editSetor').value.trim();
+  if (!setorEditVal) {
+    const rndIdx = Math.floor(Math.random() * APP_HOSPITAL_SECTORS.length);
+    setorEditVal = APP_HOSPITAL_SECTORS[rndIdx];
+    $('editSetor').value = setorEditVal;
+    showToast(`🎲 Setor atribuído automaticamente: ${setorEditVal}`, 'info');
+  }
+
   const payload = {
-    setor: $('editSetor').value.trim(),
+    setor: setorEditVal,
     data: $('editData').value,
     tipo_problema: $('editTipo').value,
     prioridade: $('editPrioridade').value,

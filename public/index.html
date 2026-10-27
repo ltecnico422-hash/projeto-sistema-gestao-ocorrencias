@@ -418,12 +418,12 @@
             <div class="form-grid">
               <div class="field">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <label for="newSetor" style="margin-bottom: 0;">Setor *</label>
+                  <label for="newSetor" style="margin-bottom: 0;">Setor (ou sorteado se vazio)</label>
                   <button type="button" class="btn-rnd-sector" onclick="randomizeSectorField('newSetor')" title="Sortear um setor hospitalar automaticamente caso não esteja nominado">
                     🎲 Sortear setor
                   </button>
                 </div>
-                <input id="newSetor" name="setor" required placeholder="Ex.: UTI NEO, Pronto Atendimento, Farmácia" list="setoresList">
+                <input id="newSetor" name="setor" placeholder="Ex.: UTI NEO, Pronto Atendimento (deixe vazio para sortear)" list="setoresList">
                 <datalist id="setoresList">
                   <option value="UTI Geral"></option>
                   <option value="UTI NEO"></option>
@@ -1574,12 +1574,12 @@
       <div class="form-grid">
         <div class="field">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label for="editSetor" style="margin-bottom: 0;">Setor *</label>
+            <label for="editSetor" style="margin-bottom: 0;">Setor (ou sorteado se vazio)</label>
             <button type="button" class="btn-rnd-sector" onclick="randomizeSectorField('editSetor')" title="Sortear um setor hospitalar">
               🎲 Sortear setor
             </button>
           </div>
-          <input id="editSetor" required>
+          <input id="editSetor" placeholder="Deixe em branco para sortear aleatoriamente">
         </div>
         <div class="field">
           <label for="editData">Data *</label>
@@ -1785,6 +1785,6 @@
 <!-- Container de Toasts -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="/js/app.js?v=4"></script>
+<script src="/js/app.js?v=5"></script>
 </body>
 </html>

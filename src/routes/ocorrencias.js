@@ -179,6 +179,9 @@ router.put('/:id', async (req, res) => {
 
     const sobreavisoVal = em_sobreaviso !== undefined ? (em_sobreaviso ? 1 : 0) : existing.em_sobreaviso;
     const bloqueioVal = motivo_bloqueio !== undefined ? (motivo_bloqueio ? String(motivo_bloqueio).trim() : null) : existing.motivo_bloqueio;
+    const finalSetor = setor !== undefined
+      ? resolveSetor(setor, problema || existing.problema, diagnostico || existing.diagnostico, true)
+      : existing.setor;
 
     await db.prepare(`
       UPDATE ocorrencias
@@ -196,7 +199,7 @@ router.put('/:id', async (req, res) => {
       WHERE id = ? AND usuario_id = ?
     `).run(
       data ?? null,
-      setor ?? null,
+      finalSetor ?? null,
       tipo_problema ?? null,
       problema ?? null,
       diagnostico ?? null,

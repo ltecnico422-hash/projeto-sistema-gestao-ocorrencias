@@ -169,7 +169,7 @@ const HOSPITAL_SECTORS = [
  */
 function resolveSetor(rawSetor, problemaText = '', diagnosticoText = '', atribuirAleatorio = true) {
   const setorStr = String(rawSetor || '').trim();
-  const isGeneric = !setorStr || /^(geral|n\/?a|n[aã]o informad[oa]|sem setor|indefinid[oa]|-|\?)$/i.test(setorStr);
+  const isGeneric = !setorStr || /^(geral|n\/?a|n[aã]o\s*informad[oa]|sem\s*setor|sem\s*nome|n[aã]o\s*nominad[oa]|desconhecid[oa]|nenhum(\s*setor)?|indefinid[oa]|-|\?|\.)$/i.test(setorStr);
 
   if (!isGeneric) {
     return setorStr;
@@ -190,6 +190,7 @@ function resolveSetor(rawSetor, problemaText = '', diagnosticoText = '', atribui
   if (/maternidade/i.test(combined)) return 'Maternidade';
   if (/enfermaria/i.test(combined)) return 'Enfermaria Clínica';
   if (/(raio-?x|tomografia|ultrassom|imagem)/i.test(combined)) return 'Diagnóstico por Imagem / Raio-X';
+  if (/(ambulat[oó]rio|consult[oó]rio)/i.test(combined)) return 'Ambulatório';
 
   // 2. Se não identificado e atribuição aleatória estiver ativa, sorteia um setor hospitalar
   if (atribuirAleatorio) {
@@ -357,12 +358,12 @@ async function parseExcelBuffer(buffer, options = {}) {
     const rawSobreaviso = headerMap.em_sobreaviso ? getCellValue(row.getCell(headerMap.em_sobreaviso)) : '';
     const rawBloqueio = headerMap.motivo_bloqueio ? getCellValue(row.getCell(headerMap.motivo_bloqueio)) : '';
 
-    // Se não tiver setor e não tiver problema, ignora
-    if (!rawProblema && !rawSetor) {
+    // Se a linha não tiver dados essenciais (nem problema, nem diagnóstico, nem ação, nem setor), ignora
+    if (!rawProblema && !rawDiagnostico && !rawAcao && !rawSetor) {
       continue;
     }
 
-    const problemaFinal = rawProblema || rawDiagnostico || 'Atendimento técnico registrado via importação Excel';
+    const problemaFinal = rawProblema || rawDiagnostico || rawAcao || 'Atendimento técnico registrado via importação Excel';
     const setorFinal = resolveSetor(rawSetor, problemaFinal, rawDiagnostico, atribuirSetorAleatorio);
     const tipoFinal = detectTipoProblema(rawTipo, problemaFinal, rawDiagnostico);
     const statusFinal = normalizeStatus(rawStatus);
