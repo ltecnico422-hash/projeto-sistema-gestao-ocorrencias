@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/auth');
 const multer = require('multer');
-const { parseExcelBuffer, generateTemplateWorkbook } = require('../utils/excelImporter');
+const { parseExcelBuffer, generateTemplateWorkbook, resolveSetor } = require('../utils/excelImporter');
 
 const uploadMemory = multer({
   storage: multer.memoryStorage(),
@@ -118,8 +118,9 @@ router.post('/', async (req, res) => {
 
     const usuarioId = req.usuario.id;
 
-    if (!setor || !tipo_problema || !problema) {
-      return res.status(400).json({ erro: 'Os campos Setor, Tipo de Problema e Problema são obrigatórios.' });
+    const finalSetor = resolveSetor(setor, problema, diagnostico, true);
+    if (!finalSetor || !tipo_problema || !problema) {
+      return res.status(400).json({ erro: 'Os campos Tipo de Problema e Problema são obrigatórios.' });
     }
 
     const finalData = data ? String(data).slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -135,7 +136,7 @@ router.post('/', async (req, res) => {
     const result = await insertStmt.run(
       usuarioId,
       finalData,
-      setor.trim(),
+      finalSetor.trim(),
       tipo_problema,
       problema.trim(),
       diagnostico ? diagnostico.trim() : '',
@@ -306,7 +307,8 @@ router.post('/importar-excel', uploadMemory.single('arquivo'), async (req, res) 
     }
 
     const usuarioId = req.usuario.id;
-    const { ocorrenciasValidas, totalLinhasLidas } = await parseExcelBuffer(req.file.buffer);
+    const atribuirSetorAleatorio = req.body.atribuirSetorAleatorio !== '0' && req.body.atribuirSetorAleatorio !== false && req.body.atribuirSetorAleatorio !== 'false';
+    const { ocorrenciasValidas, totalLinhasLidas } = await parseExcelBuffer(req.file.buffer, { atribuirSetorAleatorio });
 
     if (ocorrenciasValidas.length === 0) {
       return res.status(400).json({

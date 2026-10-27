@@ -143,6 +143,64 @@ function normalizePrioridade(raw, problemaText = '') {
 }
 
 /**
+ * Lista de setores hospitalares realistas do Hospital Regional
+ */
+const HOSPITAL_SECTORS = [
+  'Pronto Atendimento',
+  'UTI Geral',
+  'UTI NEO',
+  'Centro Cirúrgico',
+  'Farmácia Central',
+  'Recepção / Triagem',
+  'Laboratório de Análises',
+  'Almoxarifado',
+  'Faturamento',
+  'Recursos Humanos',
+  'Ambulatório',
+  'Maternidade',
+  'Enfermaria Clínica',
+  'Diagnóstico por Imagem / Raio-X'
+];
+
+/**
+ * Resolve o setor hospitalar. Se estiver vazio ou não nominado (ex: "Geral", "Sem setor", "N/A"),
+ * primeiro tenta identificar por menções no texto do chamado. Se não achar, sorteia
+ * aleatoriamente um dos setores hospitalares oficiais para manter a base completa.
+ */
+function resolveSetor(rawSetor, problemaText = '', diagnosticoText = '', atribuirAleatorio = true) {
+  const setorStr = String(rawSetor || '').trim();
+  const isGeneric = !setorStr || /^(geral|n\/?a|n[aã]o informad[oa]|sem setor|indefinid[oa]|-|\?)$/i.test(setorStr);
+
+  if (!isGeneric) {
+    return setorStr;
+  }
+
+  // 1. Tenta identificar se o texto do chamado cita algum setor
+  const combined = `${problemaText} ${diagnosticoText}`.toLowerCase();
+  if (/(pronto atendimento|\bpa\b|triagem|emerg[eê]ncia)/i.test(combined)) return 'Pronto Atendimento';
+  if (/uti\s*neo/i.test(combined)) return 'UTI NEO';
+  if (/uti/i.test(combined)) return 'UTI Geral';
+  if (/(centro cir[uú]rgico|bloco cir[uú]rgico)/i.test(combined)) return 'Centro Cirúrgico';
+  if (/farm[aá]cia/i.test(combined)) return 'Farmácia Central';
+  if (/recep[cç][aã]o/i.test(combined)) return 'Recepção / Triagem';
+  if (/laborat[oó]rio/i.test(combined)) return 'Laboratório de Análises';
+  if (/(almoxarifado|estoque)/i.test(combined)) return 'Almoxarifado';
+  if (/faturamento/i.test(combined)) return 'Faturamento';
+  if (/(recursos humanos|\brh\b)/i.test(combined)) return 'Recursos Humanos';
+  if (/maternidade/i.test(combined)) return 'Maternidade';
+  if (/enfermaria/i.test(combined)) return 'Enfermaria Clínica';
+  if (/(raio-?x|tomografia|ultrassom|imagem)/i.test(combined)) return 'Diagnóstico por Imagem / Raio-X';
+
+  // 2. Se não identificado e atribuição aleatória estiver ativa, sorteia um setor hospitalar
+  if (atribuirAleatorio) {
+    const randomIndex = Math.floor(Math.random() * HOSPITAL_SECTORS.length);
+    return HOSPITAL_SECTORS[randomIndex];
+  }
+
+  return 'Geral';
+}
+
+/**
  * Normaliza flag de Sobreaviso
  */
 function normalizeSobreaviso(raw, texto = '') {
@@ -216,7 +274,8 @@ function classifyHeader(raw) {
 /**
  * Lê e processa um buffer Excel (.xlsx) e transforma em ocorrências prontas
  */
-async function parseExcelBuffer(buffer) {
+async function parseExcelBuffer(buffer, options = {}) {
+  const atribuirSetorAleatorio = options.atribuirSetorAleatorio !== false;
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
@@ -304,7 +363,7 @@ async function parseExcelBuffer(buffer) {
     }
 
     const problemaFinal = rawProblema || rawDiagnostico || 'Atendimento técnico registrado via importação Excel';
-    const setorFinal = rawSetor || 'Geral / Não informado';
+    const setorFinal = resolveSetor(rawSetor, problemaFinal, rawDiagnostico, atribuirSetorAleatorio);
     const tipoFinal = detectTipoProblema(rawTipo, problemaFinal, rawDiagnostico);
     const statusFinal = normalizeStatus(rawStatus);
     const prioridadeFinal = normalizePrioridade(rawPrioridade, problemaFinal);
@@ -455,5 +514,7 @@ async function generateTemplateWorkbook() {
 
 module.exports = {
   parseExcelBuffer,
-  generateTemplateWorkbook
+  generateTemplateWorkbook,
+  HOSPITAL_SECTORS,
+  resolveSetor
 };

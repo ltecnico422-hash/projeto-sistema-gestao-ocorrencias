@@ -3001,6 +3001,11 @@ async function submitExcelImport() {
     const formData = new FormData();
     formData.append('arquivo', selectedExcelFile);
 
+    const chkAuto = $('chkAutoSetor');
+    if (chkAuto) {
+      formData.append('atribuirSetorAleatorio', chkAuto.checked ? '1' : '0');
+    }
+
     const res = await fetch('/api/ocorrencias/importar-excel', {
       method: 'POST',
       headers: {
@@ -3058,6 +3063,32 @@ async function submitExcelImport() {
       submitBtn.innerHTML = '<span>🚀</span> Processar e Importar Ocorrências';
     }
   }
+}
+
+const APP_HOSPITAL_SECTORS = [
+  'Pronto Atendimento',
+  'UTI Geral',
+  'UTI NEO',
+  'Centro Cirúrgico',
+  'Farmácia Central',
+  'Recepção / Triagem',
+  'Laboratório de Análises',
+  'Almoxarifado',
+  'Faturamento',
+  'Recursos Humanos',
+  'Ambulatório',
+  'Maternidade',
+  'Enfermaria Clínica',
+  'Diagnóstico por Imagem / Raio-X'
+];
+
+function randomizeSectorField(inputId = 'newSetor') {
+  const input = $(inputId);
+  if (!input) return;
+  const randomIndex = Math.floor(Math.random() * APP_HOSPITAL_SECTORS.length);
+  input.value = APP_HOSPITAL_SECTORS[randomIndex];
+  input.focus();
+  showToast(`🎲 Setor sorteado: ${input.value}`, 'success');
 }
 
 // ==========================================================

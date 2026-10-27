@@ -3284,4 +3284,25 @@ select option {
   }
 }
 
+.btn-rnd-sector {
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.btn-rnd-sector:hover {
+  background: var(--cyan);
+  color: #040810;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+  transform: translateY(-1px);
+}
+
+
 
