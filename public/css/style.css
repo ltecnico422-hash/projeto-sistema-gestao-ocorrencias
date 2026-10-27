@@ -1826,61 +1826,105 @@ select option {
   }
 
   .top {
-    padding: 12px 14px;
+    padding: 10px 14px;
     position: sticky;
     top: 0;
     z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    background: rgba(7, 14, 26, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--line);
+    min-height: 56px;
+    box-sizing: border-box;
   }
 
   .top-left {
     min-width: 0;
     gap: 10px;
-    flex: 1;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .top-left > div {
+    min-width: 0;
+    overflow: hidden;
   }
 
   .top h1 {
-    font-size: 17px;
+    font-size: 16px;
+    font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
+    line-height: 1.2;
   }
 
   .top p {
-    display: none;
+    display: none !important;
+  }
+
+  /* Oculta telemetria HUD extensa no topo em telas menores para não encavalar */
+  .hud-telemetry-bar {
+    display: none !important;
   }
 
   .top-actions {
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
   }
 
   .top-novo-btn {
-    display: none; /* Já acessível no botão central da barra inferior */
+    display: none !important; /* Já acessível no botão central da barra inferior */
   }
 
   .avatar-badge {
-    padding: 4px;
+    padding: 0;
     background: transparent;
     border: none;
+    margin: 0;
   }
 
   .avatar-badge .avatar-info {
-    display: none;
+    display: none !important;
+  }
+
+  .avatar-badge .avatar-circle {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.35);
   }
 
   .logout-text {
-    display: none;
+    display: none !important;
   }
 
   .btn-logout {
-    padding: 8px 10px;
+    padding: 6px 9px;
+    font-size: 13px;
+    border-radius: 6px;
   }
 
   #btnInstallPwa {
-    padding: 6px 8px;
+    padding: 5px 9px;
     font-size: 11px;
+    font-weight: 600;
     white-space: nowrap;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 0 10px rgba(0, 245, 160, 0.35);
   }
 
   .cards {
@@ -2012,6 +2056,38 @@ select option {
   .legend {
     flex-wrap: wrap;
     gap: 10px;
+  }
+}
+
+@media (max-width: 440px) {
+  .top {
+    padding: 8px 10px;
+  }
+
+  .top h1 {
+    font-size: 15px;
+  }
+
+  .pwa-btn-text {
+    display: none;
+  }
+
+  #btnInstallPwa {
+    padding: 5px 8px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+
+  .cards {
+    gap: 8px;
+  }
+
+  .card {
+    padding: 10px 8px;
+  }
+
+  .metric-value {
+    font-size: 19px;
   }
 }
 
