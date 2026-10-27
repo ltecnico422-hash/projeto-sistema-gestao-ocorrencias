@@ -2,8 +2,28 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
 const authMiddleware = require('../middleware/auth');
+const multer = require('multer');
+const { parseExcelBuffer, generateTemplateWorkbook } = require('../utils/excelImporter');
 
-// Todas as rotas de ocorrências exigem autenticação
+const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 } // 15MB
+});
+
+// GET /api/ocorrencias/modelo-excel - Download da planilha modelo oficial (aberto para download facilitado)
+router.get('/modelo-excel', async (req, res) => {
+  try {
+    const buffer = await generateTemplateWorkbook();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="modelo_ocorrencias_ti.xlsx"');
+    res.send(buffer);
+  } catch (error) {
+    console.error('[Modelo Excel] Erro:', error);
+    res.status(500).json({ erro: 'Erro ao gerar modelo Excel.', detalhes: error.message });
+  }
+});
+
+// Todas as rotas de ocorrências seguintes exigem autenticação
 router.use(authMiddleware);
 
 // GET /api/ocorrencias - Listagem das ocorrências do usuário com filtros
@@ -273,6 +293,82 @@ router.post('/sincronizar', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao sincronizar ocorrências.', detalhes: error.message });
+  }
+});
+
+
+
+// POST /api/ocorrencias/importar-excel - Importação e processamento inteligente de planilha
+router.post('/importar-excel', uploadMemory.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ erro: 'Nenhum arquivo Excel enviado. Selecione um arquivo .xlsx.' });
+    }
+
+    const usuarioId = req.usuario.id;
+    const { ocorrenciasValidas, totalLinhasLidas } = await parseExcelBuffer(req.file.buffer);
+
+    if (ocorrenciasValidas.length === 0) {
+      return res.status(400).json({
+        erro: 'Nenhuma ocorrência válida foi encontrada na planilha. Verifique se o arquivo contém linhas de dados.'
+      });
+    }
+
+    const checkStmt = db.prepare(`
+      SELECT id FROM ocorrencias
+      WHERE usuario_id = ? AND data = ? AND setor = ? AND problema = ?
+    `);
+
+    const insertStmt = db.prepare(`
+      INSERT INTO ocorrencias (
+        usuario_id, data, setor, tipo_problema, problema, diagnostico, o_que_foi_feito, status, prioridade, em_sobreaviso, motivo_bloqueio
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let importadas = 0;
+    let duplicadas = 0;
+
+    for (const item of ocorrenciasValidas) {
+      const exists = await checkStmt.get(usuarioId, item.data, item.setor, item.problema);
+      if (exists) {
+        duplicadas++;
+        continue;
+      }
+
+      await insertStmt.run(
+        usuarioId,
+        item.data,
+        item.setor,
+        item.tipo_problema,
+        item.problema,
+        item.diagnostico || '',
+        item.o_que_foi_feito || '',
+        item.status,
+        item.prioridade,
+        item.em_sobreaviso,
+        item.motivo_bloqueio
+      );
+      importadas++;
+    }
+
+    try { await db.exec(`PRAGMA wal_checkpoint(PASSIVE);`); } catch (e) {}
+
+    const todas = await db.prepare('SELECT * FROM ocorrencias WHERE usuario_id = ? ORDER BY data DESC, id DESC').all(usuarioId);
+
+    res.json({
+      sucesso: true,
+      mensagem: `${importadas} ocorrência(s) importada(s) e integradas com sucesso!`,
+      importadas,
+      duplicadas,
+      totalLinhas: totalLinhasLidas,
+      ocorrencias: todas
+    });
+  } catch (error) {
+    console.error('[Importar Excel] Erro:', error);
+    res.status(500).json({
+      erro: 'Falha ao processar a planilha Excel.',
+      detalhes: error.message
+    });
   }
 });
 

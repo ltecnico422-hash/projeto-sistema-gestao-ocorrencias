@@ -3158,3 +3158,130 @@ select option {
   }
 }
 
+/* ========================================================== */
+/* IMPORTAÇÃO INTELIGENTE DE EXCEL */
+/* ========================================================== */
+.excel-dropzone {
+  border: 2px dashed rgba(0, 242, 254, 0.4);
+  background: rgba(4, 9, 18, 0.7);
+  border-radius: var(--radius);
+  padding: 30px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.excel-dropzone:hover,
+.excel-dropzone.dragover {
+  border-color: var(--cyan);
+  background: rgba(0, 242, 254, 0.08);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+  transform: translateY(-2px);
+}
+
+.dropzone-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.dropzone-text strong {
+  display: block;
+  font-size: 15px;
+  color: var(--cyan);
+  margin-bottom: 4px;
+}
+
+.dropzone-text p {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.dropzone-selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.35);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  color: #ffffff;
+}
+
+.dropzone-selected-file .file-icon {
+  font-size: 20px;
+}
+
+.btn-clear-file {
+  background: transparent;
+  border: none;
+  color: #ff5577;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.btn-clear-file:hover {
+  background: rgba(255, 51, 102, 0.2);
+}
+
+.import-excel-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: linear-gradient(90deg, rgba(0, 242, 254, 0.1), rgba(0, 112, 243, 0.14));
+  border: 1px solid rgba(0, 242, 254, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.import-excel-banner:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 4px 16px rgba(0, 242, 254, 0.15);
+  transform: translateY(-1px);
+}
+
+.import-excel-banner-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.import-excel-banner-text {
+  flex: 1;
+}
+
+.import-excel-banner-text strong {
+  display: block;
+  font-size: 14px;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.import-excel-banner-text p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .import-excel-banner {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .import-excel-banner-icon {
+    margin-bottom: 4px;
+  }
+}
+
+

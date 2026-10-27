@@ -399,7 +399,18 @@
             <button type="button" class="quick-chip" onclick="applyQuickTemplate('rede')">🌐 Cabo / Conector RJ45</button>
             <button type="button" class="quick-chip" onclick="applyQuickTemplate('formatacao')">🖥️ Formatação / Imagem</button>
             <button type="button" class="quick-chip" onclick="applyQuickTemplate('preventiva')">🛡️ Preventiva de Estação</button>
+        </div>
+
+        <!-- Banner de Importação Rápida via Excel -->
+        <div class="import-excel-banner" onclick="openImportExcelModal()" title="Clique para importar vários chamados de uma vez">
+          <div class="import-excel-banner-icon">📊</div>
+          <div class="import-excel-banner-text">
+            <strong>Deseja lançar várias ocorrências de uma vez?</strong>
+            <p>Importe sua planilha Excel (.xlsx) e o sistema converte automaticamente todas as linhas em registros oficiais com categorização inteligente.</p>
           </div>
+          <button type="button" class="btn btn-success btn-sm" style="white-space: nowrap;">
+            <span>📥</span> Importar Planilha Excel
+          </button>
         </div>
 
         <div class="card form-card">
@@ -504,9 +515,14 @@
             <div class="eyebrow">Base de dados</div>
             <h2>Histórico de ocorrências</h2>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="showView('novo')">
-            + Nova ocorrência
-          </button>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-success btn-sm" onclick="openImportExcelModal()" style="display: inline-flex; align-items: center; gap: 6px;">
+              <span>📥</span> Importar Excel
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="showView('novo')">
+              + Nova ocorrência
+            </button>
+          </div>
         </div>
 
         <!-- Barra de Filtros -->
@@ -531,6 +547,9 @@
             <option value="Urgente">Urgente</option>
           </select>
           <button class="btn btn-light btn-sm" id="btnResetFilters">Limpar filtros</button>
+          <button class="btn btn-primary btn-sm" onclick="openImportExcelModal()" title="Importar planilha de chamados ou ocorrências" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span>📥</span> Importar (.xlsx)
+          </button>
           <button class="btn btn-success btn-sm" id="btnHistoryExcel">⇩ Exportar Excel (.xlsx)</button>
         </div>
 
@@ -1666,6 +1685,58 @@
   </div>
 </div>
 
+<!-- ============================================== -->
+<!-- MODAL DE IMPORTAÇÃO INTELIGENTE DE EXCEL -->
+<!-- ============================================== -->
+<div class="modal-backdrop" id="modalImportExcel">
+  <div class="modal" style="max-width: 620px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <h3 style="margin: 0; font-size: 19px; color: var(--cyan); display: flex; align-items: center; gap: 8px;">
+        <span>📥</span> Importar Ocorrências via Excel
+      </h3>
+      <button type="button" class="btn btn-light" style="padding: 4px 10px;" onclick="closeImportExcelModal()">✕ Fechar</button>
+    </div>
+
+    <p style="font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5;">
+      Envie sua planilha Excel (<code style="color: var(--cyan);">.xlsx</code> ou <code style="color: var(--cyan);">.xls</code>). O sistema analisa o cabeçalho e classifica <strong>automaticamente</strong> as categorias (Hardware, Software, Rede, Impressão, Acesso), status, datas e sobreavisos seguindo os princípios de preenchimento do sistema.
+    </p>
+
+    <!-- Área de Dropzone -->
+    <div class="excel-dropzone" id="excelDropzone" onclick="document.getElementById('excelFileInput').click()">
+      <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display: none;" onchange="handleExcelFileSelected(event)">
+      <div class="dropzone-icon">📊</div>
+      <div class="dropzone-text" id="dropzoneText">
+        <strong>Clique aqui ou arraste sua planilha Excel</strong>
+        <p>Suporta arquivos .xlsx e .xls de qualquer modelo</p>
+      </div>
+      <div id="dropzoneFileSelected" class="dropzone-selected-file" style="display: none;">
+        <span class="file-icon">📄</span>
+        <span id="selectedFileName">planilha.xlsx</span>
+        <span id="selectedFileSize" style="font-size: 11.5px; color: var(--cyan);">(0 KB)</span>
+        <button type="button" class="btn-clear-file" onclick="event.stopPropagation(); clearSelectedExcelFile();" title="Remover arquivo">&times;</button>
+      </div>
+    </div>
+
+    <!-- Download do modelo padrão -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0; background: rgba(0, 242, 254, 0.06); border: 1px dashed rgba(0, 242, 254, 0.25); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; flex-wrap: wrap; gap: 8px;">
+      <span style="color: #cbd5e1;">💡 Precisa de um modelo pronto para preencher?</span>
+      <a href="/api/ocorrencias/modelo-excel" class="btn btn-light btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cyan); border-color: rgba(0, 242, 254, 0.3);">
+        <span>📄</span> Baixar Modelo Oficial (.xlsx)
+      </a>
+    </div>
+
+    <!-- Feedback / Mensagem de Progresso -->
+    <div id="importExcelAlert" style="display: none; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;"></div>
+
+    <div class="form-actions" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" class="btn btn-light" onclick="closeImportExcelModal()">Cancelar</button>
+      <button type="button" class="btn btn-success" id="btnSubmitImportExcel" onclick="submitExcelImport()" disabled style="opacity: 0.5;">
+        <span>🚀</span> Processar e Importar Ocorrências
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Barra de Navegação Inferior para Celulares (Bottom Bar) -->
 <nav class="mobile-bottom-nav">
   <button class="bottom-nav-item active" data-view="dashboard" onclick="showView('dashboard')">
@@ -1693,6 +1764,6 @@
 <!-- Container de Toasts -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="/js/app.js?v=2"></script>
+<script src="/js/app.js?v=3"></script>
 </body>
 </html>

@@ -2859,6 +2859,208 @@ function installPwa() {
 }
 
 // ==========================================================
+// IMPORTAÇÃO INTELIGENTE DE OCORRÊNCIAS VIA EXCEL
+// ==========================================================
+
+let selectedExcelFile = null;
+
+function openImportExcelModal() {
+  selectedExcelFile = null;
+  const input = $('excelFileInput');
+  if (input) input.value = '';
+
+  const textElem = $('dropzoneText');
+  const fileElem = $('dropzoneFileSelected');
+  const alertElem = $('importExcelAlert');
+  const submitBtn = $('btnSubmitImportExcel');
+
+  if (textElem) textElem.style.display = 'block';
+  if (fileElem) fileElem.style.display = 'none';
+  if (alertElem) {
+    alertElem.style.display = 'none';
+    alertElem.innerHTML = '';
+  }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+    submitBtn.innerHTML = '<span>🚀</span> Processar e Importar Ocorrências';
+  }
+
+  const modal = $('modalImportExcel');
+  if (modal) {
+    modal.classList.add('active');
+  }
+}
+
+function closeImportExcelModal() {
+  const modal = $('modalImportExcel');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+function handleExcelFileSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  setExcelFile(file);
+}
+
+function setExcelFile(file) {
+  if (!file.name.match(/\.(xlsx|xls)$/i)) {
+    showToast('Por favor, selecione um arquivo Excel (.xlsx ou .xls)', 'error');
+    return;
+  }
+
+  selectedExcelFile = file;
+  const textElem = $('dropzoneText');
+  const fileElem = $('dropzoneFileSelected');
+  const nameElem = $('selectedFileName');
+  const sizeElem = $('selectedFileSize');
+  const submitBtn = $('btnSubmitImportExcel');
+
+  if (textElem) textElem.style.display = 'none';
+  if (fileElem) fileElem.style.display = 'flex';
+  if (nameElem) nameElem.textContent = file.name;
+  if (sizeElem) sizeElem.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.style.opacity = '1';
+  }
+}
+
+function clearSelectedExcelFile() {
+  selectedExcelFile = null;
+  const input = $('excelFileInput');
+  if (input) input.value = '';
+
+  const textElem = $('dropzoneText');
+  const fileElem = $('dropzoneFileSelected');
+  const submitBtn = $('btnSubmitImportExcel');
+
+  if (textElem) textElem.style.display = 'block';
+  if (fileElem) fileElem.style.display = 'none';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
+}
+
+function setupExcelDropzone() {
+  const dropzone = $('excelDropzone');
+  if (!dropzone) return;
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('dragover');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    }, false);
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      setExcelFile(files[0]);
+    }
+  }, false);
+}
+
+async function submitExcelImport() {
+  if (!selectedExcelFile) {
+    showToast('Selecione uma planilha Excel antes de importar.', 'error');
+    return;
+  }
+
+  const submitBtn = $('btnSubmitImportExcel');
+  const alertElem = $('importExcelAlert');
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>⏳</span> Processando e integrando planilha...';
+  }
+
+  if (alertElem) {
+    alertElem.style.display = 'block';
+    alertElem.style.background = 'rgba(0, 242, 254, 0.12)';
+    alertElem.style.color = 'var(--cyan)';
+    alertElem.style.border = '1px solid rgba(0, 242, 254, 0.35)';
+    alertElem.innerHTML = '⏳ <strong>Processando dados da planilha:</strong> Identificando cabeçalhos, categorizando chamados e registrando ocorrências...';
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('arquivo', selectedExcelFile);
+
+    const res = await fetch('/api/ocorrencias/importar-excel', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: formData
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.erro || data.detalhes || 'Erro ao processar importação.');
+    }
+
+    // Salva em cache local se disponível
+    if (Array.isArray(data.ocorrencias) && typeof saveOcorrenciasToLocalCache === 'function') {
+      saveOcorrenciasToLocalCache(data.ocorrencias);
+    }
+
+    if (alertElem) {
+      alertElem.style.background = 'rgba(0, 245, 160, 0.14)';
+      alertElem.style.color = '#00f5a0';
+      alertElem.style.border = '1px solid rgba(0, 245, 160, 0.4)';
+      alertElem.innerHTML = `
+        <strong>✓ Importação Concluída com Sucesso!</strong><br>
+        • <strong>${data.importadas}</strong> nova(s) ocorrência(s) cadastradas no sistema.<br>
+        • <strong>${data.duplicadas}</strong> linha(s) já existiam no banco e foram preservadas.<br>
+        • Total processado: <strong>${data.totalLinhas}</strong> linhas.
+      `;
+    }
+
+    showToast(`✓ ${data.importadas} ocorrência(s) importada(s) do Excel!`, 'success');
+
+    // Atualiza views
+    if (typeof loadHistory === 'function') loadHistory();
+    if (typeof loadDashboard === 'function') loadDashboard();
+
+    setTimeout(() => {
+      closeImportExcelModal();
+      showView('historico');
+    }, 2200);
+
+  } catch (err) {
+    console.error('Erro na importação Excel:', err);
+    if (alertElem) {
+      alertElem.style.background = 'rgba(255, 51, 102, 0.14)';
+      alertElem.style.color = '#ff5577';
+      alertElem.style.border = '1px solid rgba(255, 51, 102, 0.4)';
+      alertElem.innerHTML = `❌ <strong>Erro:</strong> ${escapeHtml(err.message)}`;
+    }
+    showToast(err.message || 'Erro ao importar planilha.', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>🚀</span> Processar e Importar Ocorrências';
+    }
+  }
+}
+
+// ==========================================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================================
 
@@ -2871,6 +3073,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   initPeriodSelectors();
+  setupExcelDropzone();
+
   document.querySelectorAll('.nav button').forEach((btn) => {
     btn.onclick = () => showView(btn.dataset.view);
   });
